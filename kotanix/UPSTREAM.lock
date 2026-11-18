@@ -1,0 +1,121 @@
+# UPSTREAM.lock — nguồn chuẩn của Kotanix
+# Cập nhật file này mỗi khi đổi revision. Không dùng nhánh di động (`master`, `latest`).
+
+## 1. Ứng dụng tham chiếu (Kotatsu-Redo for Android)
+
+| Trường | Giá trị |
+|---|---|
+| Repository | https://github.com/Kotatsu-Redo/Kotatsu-Redo |
+| Nhánh nền | `devel` |
+| Tag | `9.8.7` |
+| Commit (SHA-1 đầy đủ) | `9ef70777557e96c136c767b136a3022f7aff9dc4` |
+| applicationId / versionName | `io.github.kotatsuredo.kotatsu` / `9.8.7` (versionCode 2049) |
+| Vị trí trong workspace | repo gốc `/home/user/Kotanix` (checkout sẵn, dùng **chỉ đọc**) |
+| Cách xác minh | `git -C /home/user/Kotanix rev-parse HEAD` → `9ef70777557e96c136c767b136a3022f7aff9dc4` |
+| Cách tái lấy mã | `git clone https://github.com/Kotatsu-Redo/Kotatsu-Redo && cd Kotatsu-Redo && git checkout 9ef70777557e96c136c767b136a3022f7aff9dc4` |
+
+## 2. Parser bundle (kotatsu-parsers-redo)
+
+| Trường | Giá trị |
+|---|---|
+| Repository | https://github.com/Kotatsu-Redo/kotatsu-parsers-redo |
+| Commit (SHA-1 đầy đủ) | `3432a85ac02ce99824cf841aca40bfd3af78ed3f` |
+| Lý do chọn revision | `gradle/libs.versions.toml` của app ghi `parsers = "3432a85ac0"` |
+| Vị trí trong workspace | clone tham chiếu tại `/home/user/refs/kotatsu-parsers-redo` (ngoài mã Kotanix, **chỉ đọc**, không commit) |
+| Cách xác minh | `git -C /home/user/refs/kotatsu-parsers-redo rev-parse HEAD` → `3432a85ac02ce99824cf841aca40bfd3af78ed3f` |
+| Cách tái lấy mã | `git clone https://github.com/Kotatsu-Redo/kotatsu-parsers-redo && cd kotatsu-parsers-redo && git checkout 3432a85ac02ce99824cf841aca40bfd3af78ed3f` |
+
+### Ghi chú quan trọng về parser bundle
+
+`docs/BUNDLE.md` của repo parser quy định gói parser cập nhật được gửi cho app Android là **DEX**
+(Android executable), **không phải JAR chạy trên JVM**. Kotanix không nạp DEX/APK, không dùng key
+hay kênh cập nhật của upstream làm của mình. Bản phát hành Kotanix mặc định phân phối parser
+(đã build từ revision ghim, nếu khả dụng) **cùng bản release**; hiện tại môi trường build chặn
+mọi kho Maven (repo.maven.apache.org, maven.google.com, jitpack.io — xem STATUS.md), nên module
+parser online **bị chặn ở mức dependency**, không phải ở mức thiết kế. Chi tiết: `STATUS.md` §5,
+`docs/PORTING_MATRIX.md` §Nguồn online.
+
+## 3. Công cụ build Kotanix (ghim phiên bản, tải từ registry cho phép)
+
+| Công cụ | Phiên bản | Nguồn | Ghi chú |
+|---|---|---|---|
+| OpenJDK (Temurin build, đóng gói bởi `jdk4py`) | 21.0.8+9 | PyPI `jdk4py==21.0.8.2` (manylinux_2_17_x86_64) — SHA-256 của wheel ghi trong `tools/toolchain.lock` | Dùng làm runtime để chạy Gradle-less build và **bundle vào .deb** |
+| Kotlin compiler (dist chính thức JetBrains) | 2.2.10 | npm `kotlin-compiler@2.2.10` tarball | Trùng phiên bản Kotlin của upstream (`kotlin = "2.2.10"`). Gồm `kotlin-stdlib`, `kotlin(-reflect)` |
+| dpkg-deb | 1.21.23 (hệ thống) | Debian 12 | Đóng gói `.deb` |
+| libsqlite3 | 3.40.1 (hệ thống, `libsqlite3-0`) | Debian 12 | Liên kết động cho native layer JNI; .deb ghi `Depends: libsqlite3-0` |
+| Gradle | **KHÔNG DÙNG ĐƯỢC trong sandbox này** | services.gradle.org bị chặn | Build bằng `build.sh` + kotlinc ghim; xem `docs/BUILDING.md` |
+
+Chi tiết pin + SHA-256: `tools/toolchain.lock` và `tools/setup-toolchain.sh`.
+
+## 4. Thứ tự ưu tiên khi có mâu thuẫn
+
+1. Hành vi đo được trên app đúng SHA (Android 9.8.7) — không có emulator/device trong sandbox,
+   nên §1 được lấy từ **code + resource + test cùng SHA**; các điểm chỉ suy ra từ ảnh/README được
+   đánh dấu `SUY RA` trong ma trận.
+2. Code, resource và test ở cùng commit.
+3. Ảnh minh họa trong `metadata/en-US/images/` (có khung thiết bị → chỉ để định hướng).
+4. README.
+
+Ảnh chụp trong `metadata/` **không** được dùng làm golden để so SSIM trực tiếp (khung máy +
+tỷ lệ đã bị thay đổi); chúng chỉ định hướng bố cục. Chưa có ảnh đối chứng Android tự tạo tại thời
+điểm viết, nên mọi màn hình đều mang trạng thái `CHƯA XÁC MINH THỊ GIÁC` cho đến khi có ảnh
+Android từ thiết bị/emulator đúng SHA với bộ dữ liệu chung.
+
+## 5. Nguồn ngoài được phép dùng trong build
+
+- `github.com`, `codeload.github.com`, `api.github.com` (git clone / tarball)
+- `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`
+
+Mọi host Maven (Maven Central, Google Maven, JitPack, plugins.gradle.org, services.gradle.org)
+đều trả lỗi kết nối trong sandbox này ⇒ không tải được Compose Multiplatform, OkHttp, Room,
+SQLite JDBC, Gradle. Quyết định thay thế và giới hạn của chúng được ghi tại `STATUS.md` và
+`docs/PORTING_MATRIX.md` (không che đậy bằng stub).
+
+## 6. Phụ thuộc vendor build từ source (offline)
+
+Các thư viện gốc không có trong JDK/Kotlin stdlib nên được build trực tiếp từ source bằng
+kotlinc ghim. Nguồn là codeload tarball của đúng tag, SHA-256 bên dưới (lưu tại
+`/home/user/refs/srcs/` trong sandbox, **không commit vào repo**). License của từng gói
+được giữ nguyên trong source (xem `THIRD_PARTY_NOTICES.md`).
+
+| Gói | Phiên bản | Tag trên GitHub | SHA-256 (tarball) |
+|---|---|---|---|
+| okio | 3.16.0 | `parent-3.16.0` (square/okio) | `45a3c97d5d51be326cf584bf056ea63f83b76d8b812971118e99c31cb71a59a2` |
+| okhttp | 5.1.0 | `parent-5.1.0` (square/okhttp) | `5d35da5e140cbfb6f38b2b83083cbe44367db818556d58731ddaa01839ef4cad` |
+| jsoup | 1.21.2 | `1.21.2` (jhy/jsoup) | `6407d606eef462b0f2717bfebed74baad624d5c8a813d3b625ef1d871d08e3ef` |
+| org.json | 20240303 | `20240303` (stleary/JSON-java) | `615a11ebe0f3025d545ee7420b32cbef4351bda6b72ae24a297d5e9f947cb1bd` |
+| androidx.collection | **divergence, xem §7** | androidx/androidx `collection/collection` @ `cfa6d5ad3e3333bc4f0a6bdf02a3fa577aea11e2` | sparse clone |
+
+Bốn gói đầu khớp đúng phiên bản parser bundle ghim ở §2. Repo app ghim mới hơn
+(okhttp 5.3.2 / okio 3.17.0 / json 20250517, androidx.collection 1.5.0); mã tarball
+ứng với app pin đã tải và xác minh SHA-256:
+
+| Gói | Phiên bản (app pin) | Tag | SHA-256 |
+|---|---|---|---|
+| okio | 3.17.0 | `parent-3.17.0` | `7daf027d2d7edc81cb69a7306baab4f82e42a860f297e9294006071f5128176c` |
+| okhttp | 5.3.2 | `parent-5.3.2` | `e72bf913b607124b82bf987dd1d8904fa3d2463f5a5c936d21cf83dd607e7b3f` |
+| org.json | 20250517 | `20250517` | `9f17cc2fa03599b76ee12ce70eff6daa11fdb7307b76ba09c468a73c5d722109` |
+
+Các gói app-pin **chưa** được build; chỉ áp dụng khi port phần app (M2+) và ghi chú đầy đủ lúc đó.
+
+## 7. Sai lệch đã ghi nhận: androidx.collection
+
+- Parser ghim `androidx-collection = "1.5.0"`; repo app ghim `collections = "1.5.0"`.
+- Sandbox không tải được Maven artifact 1.5.0 (mọi host Maven bị chặn) nên phải build từ source.
+- Tag `collection-1.5.0` không tìm được trong phạm vi fetch cho phép; `git log -S` trên sparse
+  clone bị timeout nên không xác định được commit 1.5.0 một cách đáng tin.
+- Quyết định: build từ androidx/androidx `collection/collection` **tại tip của nhánh main
+  (`COLLECTION = "1.8.0-alpha01"`)**, commit `cfa6d5ad3e3333bc4f0a6bdf02a3fa577aea11e2`.
+  API `SimpleArrayMap`/`ArrayMap`/`ScatterMap`… mà parser dùng không đổi đáng kể so với 1.5.0.
+- Hệ quả: JAR `androidx-collection-1.8.0-alpha01.jar` build được có API mới hơn parser pin.
+  Khi có thể, fetch đúng tag `collection-1.5.0` (hoặc commit tương ứng) và build lại; khi đó
+  chỉ cần đổi nguồn sparse clone, không phải đổi pipeline.
+- Java sources (ArrayMap.java, ArraySetJvmUtil.java, package-info.java) được port thủ công sang
+  Kotlin tại `thirdparty/androidx-collection-overlay/` (semantic giữ nguyên). SimpleArrayMap.
+  getOrDefault được đổi tên thành `getOrDefaultArrayMap` trong bước post-flatten
+  (`tools/patch-acollection-simplearraymap.py`) để tránh clash mapped-type với JDK8 default method;
+  hành vi runtime không đổi.
+- Okio được build từ source bằng `tools/flatten-mpp.py` (xoá expect/ghi lại default tham số
+  xuyên file, strip phần JS/annotation JVM không được phép) + `tools/make-jar.py`
+  (đóng gói JAR xác định, timestamp cố định). Không chỉnh sửa source gốc trong repo
+  (xoá expect/annotation chỉ xảy ra trên bản copy trong `build/deps/`).
