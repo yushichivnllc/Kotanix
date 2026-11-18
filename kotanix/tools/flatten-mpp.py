@@ -176,6 +176,47 @@ def _split_top_level(params: str):
 	return parts
 
 
+
+def _skip_type_params_and_name(text: str, after: int, hi: int):
+	"""From position after `fun`/`constructor`, skip optional type parameters <...>, then read
+	the declaration name. Returns (name_or_None, index_after_name)."""
+	q = after
+	while q < hi and text[q] in " \t\r\n":
+		q += 1
+	if text[q:q + 1] == "<":
+		depth = 0
+		k = q
+		in_string = None
+		while k < hi:
+			c = text[k]
+			if in_string:
+				if c == "\\":
+					k += 2
+					continue
+				if c == in_string:
+					in_string = None
+				k += 1
+				continue
+			if c in "\"'":
+				in_string = c
+				k += 1
+				continue
+			if c == "<":
+				depth += 1
+			elif c == ">":
+				depth -= 1
+				if depth == 0:
+					k += 1
+					break
+			k += 1
+		q = k
+	while q < hi and text[q] in " \t\r\n":
+		q += 1
+	m = re.match(r"([A-Za-z_][\w`]*|`[^`]+`)", text[q:q + 64])
+	if m:
+		return m.group(1), q + m.end()
+	return None, q
+
 _PARAM_RE = re.compile(r"^(?P<lead>(?:\s|@[A-Za-z_][\w.]*(?:\((?:[^()\n]|\([^()\n]*\))*\))?|vararg|override|crossinline|noinline|reified)*?)\s*(?:vararg\s+)?(?P<name>[A-Za-z_][\w`]*|`[^`]+`)\s*:\s*(?P<rest>.*)$", re.S)
 _NAME_RE = re.compile(r"(?:fun|class|interface|object|val|var|typealias)\s+(?P<name>[A-Za-z_][\w`]*|`[^`]+`)")
 
@@ -404,6 +445,17 @@ def _find_expects(text: str, lo: int, hi: int, parent: str, out: list, regions: 
 def _decl_name_and_params(decl: str):
 	"""Extract (name, params_text or None, is_ctor_of_class)."""
 	stripped = _strip_annotations(decl)
+	km = re.search(r"(fun|class|interface|object|val|var|typealias|constructor)\b", stripped)
+	if km and stripped[km.end():km.end() + 200].lstrip().startswith("<"):
+		_n, _end = _skip_type_params_and_name(stripped, km.end(), len(stripped))
+		if _n is not None:
+			kind0 = km.group(1)
+			parent = _n if kind0 == "class" else None
+			p_idx = decl.find("(")
+			if p_idx < 0:
+				return (kind0, _n, None, parent)
+			params, _ = _balanced(decl, p_idx)
+			return (kind0, _n, params, parent)
 	m = _NAME_RE.search(stripped)
 	kind = None
 	kind_m = re.search(r"(fun|class|interface|object|val|var|typealias|constructor)", stripped)
@@ -461,13 +513,10 @@ def collect_member_defaults(text: str, lo: int, hi: int, defaults: dict):
 			return
 		kind = m.group(1)
 		after = m.end()
-		rest = text[after:after + 200]
-		name_m = re.match(r"([A-Za-z_][\w`]*|`[^`]+`)", rest)
 		if kind in ("val", "var"):
 			pos = after
 			continue
-		name = name_m.group(1) if name_m else None
-		p_start = after + (name_m.end() if name_m else 0)
+		name, p_start = _skip_type_params_and_name(text, after, hi)
 		# skip type parameters
 		q = p_start
 		ndangle = 0
@@ -598,18 +647,16 @@ def inject_defaults(text: str, defaults: dict):
 	for m in token.finditer(text):
 		kind = m.group(1)
 		after = m.end()
-		rest = text[after:after + 200]
-		name_m = re.match(r"([A-Za-z_][\w`]*|`[^`]+`)", rest)
 		if kind in ("class", "interface", "object"):
-			if not name_m:
+			name_m2, p_start = _skip_type_params_and_name(text, after, len(text))
+			if not name_m2:
 				continue
-			key_name = "ctor:" + name_m.group(1)
-			p_start = after + name_m.end()
+			key_name = "ctor:" + name_m2
 		elif kind == "fun":
-			if not name_m:
+			name_m2, p_start = _skip_type_params_and_name(text, after, len(text))
+			if not name_m2:
 				continue
-			key_name = "fun:" + name_m.group(1)
-			p_start = after + name_m.end()
+			key_name = "fun:" + name_m2
 		elif kind == "constructor":
 			prefix = text[:m.start()]
 			cls = None

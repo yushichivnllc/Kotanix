@@ -82,9 +82,21 @@ kotlinc ghim. Nguồn là codeload tarball của đúng tag, SHA-256 bên dướ
 |---|---|---|---|
 | okio | 3.16.0 | `parent-3.16.0` (square/okio) | `45a3c97d5d51be326cf584bf056ea63f83b76d8b812971118e99c31cb71a59a2` |
 | okhttp | 5.1.0 | `parent-5.1.0` (square/okhttp) | `5d35da5e140cbfb6f38b2b83083cbe44367db818556d58731ddaa01839ef4cad` |
-| jsoup | 1.21.2 | `1.21.2` (jhy/jsoup) | `6407d606eef462b0f2717bfebed74baad624d5c8a813d3b625ef1d871d08e3ef` |
+| jsoup | 1.21.2 | `jsoup-1.21.2` (jhy/jsoup) | `6407d606eef462b0f2717bfebed74baad624d5c8a813d3b625ef1d871d08e3ef` |
 | org.json | 20240303 | `20240303` (stleary/JSON-java) | `615a11ebe0f3025d545ee7420b32cbef4351bda6b72ae24a297d5e9f947cb1bd` |
 | androidx.collection | **divergence, xem §7** | androidx/androidx `collection/collection` @ `cfa6d5ad3e3333bc4f0a6bdf02a3fa577aea11e2` | sparse clone |
+
+okio, okhttp và androidx.collection được build tự động bằng `tools/build-deps.sh`
+(flatten + kotlinc + đóng gói JAR xác định). okhttp build từ `commonJvmAndroid` + `jvmMain`;
+`IdnaMappingTableInstance.kt` được sinh lại từ đúng bảng Unicode ghim của release 5.1.0
+(driver: `tools/gen-idna-mapping-table.kt`) — không chép nhị phân từ artifact nào.
+Các provider tùy chọn (Conscrypt, BouncyCastle, OpenJSSE, GraalVM native-image, animal-sniffer)
+chỉ được stub ở `thirdparty/okhttp-stubs/` cho compile-time (tương đương `compileOnly` trong
+Maven); stub KHÔNG được đóng gói vào `okhttp-5.1.0.jar`. Người dùng cuối muốn dùng các provider
+này phải tự cài (ví dụ conscrypt-openjdk-uber) như với okhttp gốc.
+jsoup và org.json là thư viện **Java thuần**, không build được trong môi trường này
+(không có javac); chúng không cần cho các milestone M0–M1 (Kotanix tự có JSON reader riêng
+trong `kotanix/core/Json.kt`). Quyết định lại khi tới M2 (parser online) và ghi lại tại STATUS.md.
 
 Bốn gói đầu khớp đúng phiên bản parser bundle ghim ở §2. Repo app ghim mới hơn
 (okhttp 5.3.2 / okio 3.17.0 / json 20250517, androidx.collection 1.5.0); mã tarball
@@ -119,3 +131,5 @@ Các gói app-pin **chưa** được build; chỉ áp dụng khi port phần app
   xuyên file, strip phần JS/annotation JVM không được phép) + `tools/make-jar.py`
   (đóng gói JAR xác định, timestamp cố định). Không chỉnh sửa source gốc trong repo
   (xoá expect/annotation chỉ xảy ra trên bản copy trong `build/deps/`).
+- `flatten-mpp.py` còn chèn `mustCreate: Boolean = false` v.v. vào các `actual fun` đa dòng
+  có generic (ví dụ `FileSystem.write`), khớp với default của `expect` tương ứng.
