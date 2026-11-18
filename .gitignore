@@ -30,3 +30,10 @@
 /.idea/AndroidProjectSystem.xml
 /.idea
 /app/release
+
+# Kotanix build output
+/kotanix/build
+/reference/
+
+# Python caches (offline dep build tools)
+__pycache__/
