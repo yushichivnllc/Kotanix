@@ -13,12 +13,13 @@ M2 UI+online, M3 packaging).
 | Room/SQLite schema (`MangaDatabase`) | `kotanix/data/Schema.kt` + JNI `kotanixsqlite.c` | **XONG (tương đương chức năng)** | không dùng Room; SQL thuần qua JNI + libsqlite3 hệ thống; schema tương thích backup, không tương thích file DB Android |
 | History/Favourites stores | `kotanix/data/HistoryStore.kt`, `FavouritesStore.kt`, `MangaStore.kt` | **XONG** | kiểm bằng smoke tests |
 | Đọc local: `LocalMangaParser` (folder/cbz/nest) | `kotanix/local/LocalMangaParser.kt` | **XONG** | kiểm 4 layout + natural order |
-| Local reading UI (reader, gestures) | — | **CHƯA LÀM** | M2 |
-| Screens (home/feed/details/search…) Compose | — | **CHƯA LÀM** | M2; chọn toolkit (Kotlin/JVM; Compose for Desktop/GTK/Qt) chưa phê duyệt |
+| Local reading UI (reader, gestures) | `kotanix/ui/ReaderFrame.kt` | **MỘT PHẦN** | Swing; reader page-by-page, ←/→/ESC; không có gesture/zoom/mode ngang; chưa render trên màn hình thật |
+| Screens (home/feed/details/search…) Compose | `kotanix/ui/{MainFrame,MangaListPanel,CoverLoader,Placeholder}.kt` | **MỘT PHẦN** | Swing, tab Favourites/Local/History; hiển thị + duyệt local OK theo unit test; pixels chưa kiểm trên desktop thật |
+| `.deb` packaging (M3) | `tools/package-deb.sh`, `packaging/` | **XONG (chưa cài thật)** | dpkg-deb; staged install kiểm bằng JRE bundle; `sudo dpkg -i` chưa kiểm |
 | kotatsu-parsers-redo @ `3432a85a` | — | **CHẶN (một phần)** | okhttp ✓; org.json/jsoup là Java thuần, không javac → xem STATUS.md §5 |
 | Backup: export đọc được bởi Android Kotatsu | — | **CHƯA XÁC MINH** | cần emulator/device 9.8.7 |
 | `app/src/androidTest` (UI tests) | — | **CHƯA LÀM** | cần UI + thiết bị |
-| `.deb` đóng gói, auto-update, desktop integration | — | **CHƯA LÀM** | M3 |
+| Desktop integration (`.desktop`, hicolor icons, launcher) | `packaging/kotanix.desktop`, `packaging/icons/`, `packaging/kotanix-launcher` | **XONG (chưa chạy thật)** | staged install qua `dpkg-deb -x` + selftest OK; desktop chưa chạy thật (headless) |
 | Backup `identity` key handling | xử lý an toàn, không ghi log key | **XONG** | `report.identityKeyPresent` dùng để báo cáo, không in giá trị |
 
 ## Nguồn online

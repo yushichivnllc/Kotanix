@@ -133,3 +133,16 @@ Các gói app-pin **chưa** được build; chỉ áp dụng khi port phần app
   (xoá expect/annotation chỉ xảy ra trên bản copy trong `build/deps/`).
 - `flatten-mpp.py` còn chèn `mustCreate: Boolean = false` v.v. vào các `actual fun` đa dòng
   có generic (ví dụ `FileSystem.write`), khớp với default của `expect` tương ứng.
+
+## 8. Packaging (tools/package-deb.sh + packaging/)
+
+- `packaging/icons/kotanix-*.png`: ảnh AI-generated (2026-11-18), xuất phát từ tác phẩm
+  gốc của dự án Kotanix, không mượn từ Kotatsu-Redo. Không cần pin upstream.
+- kotlin-stdlib đóng gói trong .deb lấy từ toolchain Kotlin ghim 2.2.10
+  (`kotlinc/lib/kotlin-stdlib.jar`, SHA-256 `9c67cc79efd6b9215b49d2a4308f5f3433537376c7c88e89bdd6729bd096e61a`) —
+  same artifact mà `setup-toolchain.sh` đã tải từ npm `kotlin-compiler@2.2.10`
+  (SHA-256 `cec7d5a867deddd2d61d60f2890262cb30b9b9fc7e32cdb33aeaf8abb2bf88cb`).
+- Temurin JRE bundle vào .deb lấy từ `$KOTANIX_TOOLS/jdk` do `setup-toolchain.sh` giải
+  nén từ `jdk4py` (JDK4PY_SHA256 trong `tools/toolchain.lock`). Bắt buộc phải là đúng
+  bản đã verify; script không tự tải gì.
+- `dpkg-deb` từ hệ thống (Debian 12: 1.21.23) — công cụ build, không đóng gói.

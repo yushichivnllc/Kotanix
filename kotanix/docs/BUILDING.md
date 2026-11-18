@@ -79,10 +79,45 @@ Backup file tham chiếu: `../app/src/androidTest/assets/kotatsu_test.bak` (đư
 
 ## 6. Đóng gói `.deb`
 
-Chưa triển khai (M3). `dpkg-deb` có sẵn trên Debian 12; thiết kế dự kiến: bundle JRE 21
-Temurin ghim (đã xác minh SHA-256), `Depends: libsqlite3-0, ca-certificates`.
+```sh
+bash tools/package-deb.sh                 # .deb self-contained (bundled Temurin JRE), ~26 MB
+KOTANIX_SYSTEM_JRE=1 bash tools/package-deb.sh   # gói nhỏ ~3.6 MB, Depends: openjdk-21-jre-headless | default-jre-headless
+```
 
-## 7. Xác minh nguồn
+Yêu cầu: bước 1 (toolchain) và bước 2 (jars) đã chạy. Kết quả:
+`kotanix/build/dist/kotanix_0.1.0_amd64.deb` (gitignored).
+
+Bố cục gói: `/usr/bin/kotanix` launcher (sh, tôn trọng `$KOTANIX_JRE`),
+`/usr/lib/kotanix/{jre,lib}` (app jar + deps + `libkotanixsqlite.so`),
+`/usr/share/applications/kotanix.desktop`, icons hicolor 16–512 px,
+`/usr/share/doc/kotanix/{THIRD_PARTY_NOTICES.md,UPSTREAM.lock,copyright}`.
+`Depends: libsqlite3-0 (>= 3.34), ca-certificates`.
+
+Kiểm nhanh không cần root:
+
+```sh
+dpkg-deb -x build/dist/kotanix_0.1.0_amd64.deb /tmp/kotanix-stage
+LANG=C.UTF-8 /tmp/kotanix-stage/usr/lib/kotanix/jre/bin/java \
+    -Djava.library.path=/tmp/kotanix-stage/usr/lib/kotanix/lib \
+    -cp '/tmp/kotanix-stage/usr/lib/kotanix/lib/*' \
+    kotanix.ui.KotanixKt --selftest=../app/src/androidTest/assets/kotatsu_test.bak
+```
+
+Kết quả kỳ vọng: `SELFTEST OK — 7 checks`.
+
+**CHƯA XÁC MINH**: `sudo dpkg -i` trên máy thật (sandbox không có root); hiển thị UI trên
+màn hình thật; auto-update (ngoài phạm vi M3).
+
+## 7. App swing — chạy thử
+
+```sh
+$JAVA_HOME/bin/java -Djava.library.path=<dir> \
+    -cp 'build/classes/main:build/deps/jars/*:$KOTLINC_HOME/lib/kotlin-stdlib.jar' \
+    kotanix.ui.KotanixKt                    # mở cửa sổ chính
+    kotanix.ui.KotanixKt --selftest=../app/src/androidTest/assets/kotatsu_test.bak
+```
+
+## 8. Xác minh nguồn
 
 - `UPSTREAM.lock` — mọi revision/tarball/hash cho app, parsers, deps, toolchain.
 - `THIRD_PARTY_NOTICES.md` — license + attribution của tất cả thành phần.

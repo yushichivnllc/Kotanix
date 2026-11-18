@@ -35,3 +35,7 @@ Ghi chú:
   Apache-2.0 (§4(d)) và GPL-3.0 (§5). GPL-3.0 tương thích với Apache-2.0.
 - `kotatsu_test.bak` dùng trong test được lấy từ `app/src/androidTest/assets/` của
   upstream (test fixture của Kotatsu-Redo, GPL-3.0), chỉ dùng để kiểm thử backup.
+- Icon hicolor trong `packaging/icons/` là ảnh do AI tạo cho dự án (không sao chép icon
+  upstream); asset thuộc về Kotanix và được phát hành cùng license GPL-3.0.
+- `/usr/bin/kotanix` và `packaging/kotanix.desktop` là script/metadata của dự án (GPL-3.0),
+  không có mã nguồn bên thứ ba.

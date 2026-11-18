@@ -1,0 +1,13 @@
+#!/bin/sh
+# Kotanix launcher — bundled Temurin JRE lives next to the app in /usr/lib/kotanix/jre.
+# Set KOTANIX_JRE to override (e.g. a system openjdk-21) for development.
+JRE="${KOTANIX_JRE:-/usr/lib/kotanix/jre}"
+if [ -x "$JRE/bin/java" ]; then
+	JAVA_BIN="$JRE/bin/java"
+else
+	JAVA_BIN="$(command -v java)"
+fi
+export LANG="${LANG:-C.UTF-8}"
+exec "$JAVA_BIN" -Djava.library.path=/usr/lib/kotanix/lib \
+	-cp '/usr/lib/kotanix/lib/*' \
+	kotanix.ui.KotanixKt "$@"

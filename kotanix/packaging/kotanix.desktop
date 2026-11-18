@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Kotanix
+GenericName=Manga Reader
+Comment=Local-first manga reader, a Linux port of Kotatsu
+Exec=kotanix
+Icon=kotanix
+Terminal=false
+StartupNotify=true
+Categories=Graphics;Viewer;
+Keywords=manga;comic;cbz;cbr;reader;

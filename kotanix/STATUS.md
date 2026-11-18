@@ -55,8 +55,26 @@ quá bằng chứng trong repo hoặc output test thật. Quy ước trạng th�
 
 ## 4. Giao diện người dùng (M2)
 
-- **CHƯA BẮT ĐẦU** port UI Linux-native (Kotlin/JVM + toolkit). Milestone này chưa có
-  thiết kế/chọn toolkit được phê duyệt; chưa viết code UI.
+- **XONG (code + headless kiểm chứng)** UI đầu tiên dùng **Swing** (JDK có `java.desktop`;
+  không JavaFX, không Android toolkit). Các màn hình, theo layout Android (Favourites /
+  Local / History):
+  - `kotanix/ui/MainFrame.kt` — cửa sổ chính, 3 tab "Yêu thích", "Local", "Lịch sử";
+    menu Tệp (nhập/xuất `.bak`), Thư viện (thêm thư mục/CBZ, gỡ khỏi local), Trợ giúp.
+    Danh mục yêu thích load từ DB; "Xoá hết lịch sử" có xác nhận.
+  - `kotanix/ui/MangaListPanel.kt` — danh sách có thumbnail; **cover local** load từ đĩa
+    (không mạng); placeholder tối + chữ initial khi không có ảnh; cache icon 128 mục.
+  - `kotanix/ui/ReaderFrame.kt` — reader local: lật trang CHƯƠNG/TOC, phím ←/→/ESC,
+    progressbar, **ghi history mỗi lần lật trang** (giữ `created_at`, cập nhật `chapter_id`,
+    `page`, `percent`, `chapters`), resume từ lịch sử khi mở lại.
+  - `kotanix/ui/SelfTest.kt` — `--selftest=<fixture.bak>` chạy **không cần màn hình**:
+    restore fixture → kiểm tra history/categories/favourites/local import + local_index.
+    Kết quả trên máy này: `SELFTEST OK — 7 checks`.
+- **CHƯA XÁC MINH** UI **hiển thị thật** (màu, font, layout, icon, click) — sandbox
+  headless, không có X11/Wayland. Toàn bộ logic dữ liệu đã kiểm chứng qua `--selftest`
+  và unit smoke test; phần pixels chưa có người nhìn thấy bằng mắt. Cần chạy `kotanix`
+  trên máy có desktop thật trước khi tuyên bố UI hoàn tất.
+- **CHƯA XÁC MINH** đọc CBZ/CBR: chỉ `.cbz`/`.zip` được hỗ trợ; CBR (rar) chưa có
+  decoder (upstream dùng rar5 từ Android lib — ngoài phạm vi hiện tại).
 
 ## 5. Online parsers (M2)
 
@@ -70,8 +88,23 @@ quá bằng chứng trong repo hoặc output test thật. Quy ước trạng th�
 
 ## 6. Đóng gói `.deb` (M3)
 
-- **CHƯA BẮT ĐẦU** `dpkg-deb` có sẵn; skeleton cần quyết định runtime bundling
-  (JRE 21 bundle vs phụ thuộc hệ thống) + toolchain giới thiệu cho người dùng cuối.
+- **XONG (xây + kiểm staged install)** `tools/package-deb.sh` build
+  `kotanix_0.1.0_amd64.deb` hoàn toàn offline:
+  - Compile sources → `kotanix-app.jar` (manifest `Main-Class=kotanix.ui.KotanixKt`).
+  - `libkotanixsqlite.so` (gcc, `-l:libsqlite3.so.0`) vào `/usr/lib/kotanix/lib/`.
+  - Jar phụ thuộc (okio/collection/okhttp/kotlin-stdlib từ toolchain ghim).
+  - **Bundled Temurin JRE 21** (mặc định; `KOTANIX_SYSTEM_JRE=1` để build gói nhỏ ~3.6 MB
+    phụ thuộc `openjdk-21-jre-headless | default-jre-headless`).
+  - `/usr/bin/kotanix` launcher (sh), `.desktop`, icon hicolor 16–512 px, doc
+    (`THIRD_PARTY_NOTICES.md`, `UPSTREAM.lock`), maintainer scripts `postinst`/`postrm`
+    (an toàn khi thiếu `update-desktop-database`).
+  - `Depends: libsqlite3-0 (>= 3.34), ca-certificates`.
+- **ĐÃ KIỂM CHỨNG** `dpkg-deb -x` staged install → chạy bằng JRE bundle đóng gói →
+  `SELFTEST OK — 7 checks` (restore fixture + local import) **không cần network**.
+  Build biến thể `KOTANIX_SYSTEM_JRE=1` cũng thành công.
+- **CHƯA XÁC MINH** cài đặt thật (`sudo dpkg -i`) trên máy Debian/Ubuntu sạch: sandbox
+  không có root. Chưa chắc `Depends` đủ cho mọi bản phân phối Debian-family; gói không
+  tuyên bố hỗ trợ distro khác (rpm, Arch…).
 
 ## 7. Vấn đề đã biết / nợ kỹ thuật
 
@@ -87,5 +120,5 @@ quá bằng chứng trong repo hoặc output test thật. Quy ước trạng th�
   chặn); đã kiểm chứng HTTPS + HTTP/2 bằng cách trust `/etc/ssl/certs/ca-certificates.crt`
   — trên máy thật, ca-certificates hệ thống là đường đúng. Không disabling certificate
   validation ở bất cứ đâu.
-- File SQLite `kotanixsqlite.so` cần build bằng `gcc` (xem `docs/BUILDING.md`); chưa đóng
-  gói `.deb`, chưa có `Depends: libsqlite3-0` thực tế.
+- `tools/package-deb.sh` cần toolchain (`setup-toolchain.sh`) + jars (`build-deps.sh`);
+  `.deb` build ra đặt ở `kotanix/build/dist/` (gitignored, không commit).
