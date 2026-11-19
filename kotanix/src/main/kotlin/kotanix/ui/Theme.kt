@@ -278,3 +278,87 @@ fun divider(): javax.swing.JComponent = object : javax.swing.JComponent() {
 	}
 	override fun getPreferredSize(): Dimension = Dimension(Int.MAX_VALUE, 8)
 }
+
+/** Rounded center-cropped cover used on the details screen (radius 18). */
+class RoundedCover(
+	private val image: java.awt.image.BufferedImage?,
+	private val fallbackLetter: String,
+	private val w: Int = 150,
+	private val h: Int = 225,
+) : javax.swing.JComponent() {
+
+	init {
+		isOpaque = false
+	}
+
+	override fun getPreferredSize(): java.awt.Dimension = java.awt.Dimension(w, h)
+
+	override fun paintComponent(g: java.awt.Graphics) {
+		val g2 = T.g2(g)
+		val shape = java.awt.geom.RoundRectangle2D.Float(0f, 0f, width.toFloat(), height.toFloat(), 18f, 18f)
+		g2.clip(shape)
+		val img = image
+		if (img != null) {
+			val scale = maxOf(width.toDouble() / img.width, height.toDouble() / img.height)
+			val srcW = (width / scale).toInt().coerceIn(1, img.width)
+			val srcH = (height / scale).toInt().coerceIn(1, img.height)
+			val srcX = (img.width - srcW) / 2
+			val srcY = (img.height - srcH) / 2
+			g2.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BILINEAR)
+			g2.drawImage(img, 0, 0, width, height, srcX, srcY, srcX + srcW, srcY + srcH, null)
+		} else {
+			val palette = intArrayOf(0x2F3B4C, 0x3C2F4C, 0x2F4C3B, 0x4C2F2F, 0x274C56, 0x45322E)
+			val base = java.awt.Color(palette[Math.floorMod(fallbackLetter.hashCode(), palette.size)])
+			g2.paint = java.awt.GradientPaint(0f, 0f, base.brighter(), 0f, height.toFloat(), base.darker().darker())
+			g2.fillRect(0, 0, width, height)
+			g2.color = java.awt.Color(0xE8E3D8)
+			g2.font = T.font(64f, bold = true)
+			val letter = fallbackLetter.trim().firstOrNull()?.uppercaseChar()?.toString() ?: "?"
+			val fm = g2.fontMetrics
+			g2.drawString(letter, (width - fm.stringWidth(letter)) / 2, (height + fm.ascent) / 2 - 6)
+		}
+		g2.clip = null
+		g2.color = T.Outline
+		g2.stroke = java.awt.BasicStroke(1f)
+		g2.draw(shape)
+		g2.dispose()
+	}
+}
+
+
+/**
+ * Single-column GridBag container that pins the scroll-view width to the viewport
+ * (Scrollable.tracksViewportWidth). BoxLayout's transverse-axis alignment depends on
+ * ComponentOrientation, which is UNKNOWN for unparented/offscreen trees — GridBag with
+ * NORTHWEST anchor is deterministic. Vertical glue keeps short content top-anchored.
+ */
+internal class FillWidthPanel : javax.swing.JPanel(java.awt.GridBagLayout()), javax.swing.Scrollable {
+
+	private var row = 0
+
+	init {
+		isOpaque = false // stay transparent — KotanixApp sets Panel.background to SurfaceHigh
+	}
+
+	fun addRow(component: java.awt.Component, fill: Int = java.awt.GridBagConstraints.HORIZONTAL, weighty: Double = 0.0) {
+		add(component, java.awt.GridBagConstraints().apply {
+			gridx = 0
+			gridy = row++
+			weightx = 1.0
+			this.weighty = weighty
+			this.fill = fill
+			anchor = java.awt.GridBagConstraints.NORTHWEST
+		})
+	}
+
+	fun addGlue() {
+		addRow(javax.swing.Box.createVerticalGlue(), fill = java.awt.GridBagConstraints.BOTH, weighty = 1.0)
+	}
+
+	override fun getScrollableTracksViewportWidth(): Boolean = true
+	override fun getScrollableTracksViewportHeight(): Boolean = false
+	override fun getPreferredScrollableViewportSize(): java.awt.Dimension = preferredSize
+	override fun getScrollableUnitIncrement(visibleRect: java.awt.Rectangle, orientation: Int, direction: Int): Int = 48
+	override fun getScrollableBlockIncrement(visibleRect: java.awt.Rectangle, orientation: Int, direction: Int): Int =
+		visibleRect.height.coerceAtLeast(200)
+}

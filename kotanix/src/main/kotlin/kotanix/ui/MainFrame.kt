@@ -17,8 +17,9 @@ import javax.swing.filechooser.FileNameExtensionFilter
 /**
  * Kotanix main window — Kotatsu-Redo's dark look translated to Swing: black background,
  * pill search bar, cover grid, Material-3 bottom navigation and an extended FAB.
- * Favourites / Local / History tabs; backup import/export and library actions live in the
- * overflow (⋮) menu and per-tab chips (no desktop menu bar, like Android).
+ * Tab order follows the Android home (History → Favourites → Explore → Local);
+ * backup import/export and library actions live in the overflow (⋮) menu and per-tab chips
+ * (no desktop menu bar, like Android). Tapping a card opens the details screen, like Android.
  */
 class KotanixApp {
 
@@ -57,42 +58,62 @@ class MainFrame(
 	private val db: SqliteDatabase,
 ) : javax.swing.JFrame("Kotanix") {
 
+	private companion object {
+		const val TAB_HISTORY = 0
+		const val TAB_FAVOURITES = 1
+		const val TAB_EXPLORE = 2
+		const val TAB_LOCAL = 3
+		const val TAB_COUNT = 4
+	}
+
 	private val mangaStore = MangaStore(db)
 	private val favouritesStore = FavouritesStore(db)
 	private val historyStore = HistoryStore(db)
 
-	private val favouritesGrid = CoverGridPanel("Chưa có manga yêu thích.\nMở một bộ truyện rồi bấm “Toggle yêu thích”.") { openManga(it) }
-	private val localGrid = CoverGridPanel("Chưa có manga local.\nBấm “Thêm thư mục…” hoặc “Thêm CBZ…” phía trên.") { openManga(it) }
-	private val historyGrid = CoverGridPanel("Chưa có lịch sử đọc.") { openManga(it) }
-	private val grids = listOf(favouritesGrid, localGrid, historyGrid)
+	private val favouritesGrid = CoverGridPanel("Chưa có manga yêu thích.\nMở một bộ truyện rồi bấm “Yêu thích”.") { openDetails(it) }
+	private val localGrid = CoverGridPanel("Chưa có manga local.\nBấm “Thêm thư mục…” hoặc “Thêm CBZ…” phía trên.") { openDetails(it) }
+	private val historyPanel = HistorySectionsPanel("Chưa có lịch sử đọc.") { openDetails(it) }
+	private val explorePanel = ExplorePanel(
+		db, mangaStore,
+		onOpenDetails = { openDetails(it) },
+		onOpenLocalTab = { selectTab(TAB_LOCAL) },
+		onShowBookmarks = { showBookmarks() },
+		onInfo = { message -> infoDialog(message) },
+	)
 
-	private val screenNames = listOf("favourites", "local", "history")
-	private val queries = arrayOf("", "", "")
-	private var currentTab = 0
+	private val screenNames = listOf("history", "favourites", "explore", "local")
+	private val queries = arrayOf("", "", "", "")
+	private var currentTab = TAB_HISTORY
+	private var lastHistoryCount = 0
 
 	private val cardStack = javax.swing.JPanel(CardLayout()).apply { background = T.Bg }
 	private val searchPill = SearchPill("Tìm manga…") { q ->
 		queries[currentTab] = q
-		grids[currentTab].setFilter(q)
+		applyFilterFor(currentTab, q)
 	}
 
 	// favourites chips
 	private var currentCategoryId: Long = 1L
 	private var currentCategoryTitle: String = "Thư viện"
 	private val categoryChip = PillChip({ "Danh mục: $currentCategoryTitle  ▾" }) { showCategoryMenu() }
-	private val toggleFavouriteChip = PillChip({ "Toggle yêu thích" }, Icons.heart(18, T.Accent, filled = true)) {
-		favouritesGrid.selected()?.let {
-			favouritesStore.toggleFavourite(it.id, currentCategoryId)
-			refreshFavourites()
-		}
-	}
 
 	// local chips
 	private val addFolderChip = PillChip({ "Thêm thư mục…" }, Icons.folder(18, T.OnBg)) { importLocalManga(folder = true) }
 	private val addCbzChip = PillChip({ "Thêm CBZ…" }, Icons.filePlus(18, T.OnBg)) { importLocalManga(folder = false) }
-	private val removeLocalChip = PillChip({ "Gỡ khỏi local" }, Icons.trash(18, T.OnBg)) { removeSelectedLocal() }
 
 	// history chips
+	private var historyLocalOnly = false
+	private var historyCompletedOnly = false
+	private val historyLocalOnlyChip: PillChip = PillChip({ "Trên máy" }, Icons.folder(18, T.Accent)) {
+		historyLocalOnly = !historyLocalOnly
+		historyLocalOnlyChip.toggled = historyLocalOnly
+		refreshHistory()
+	}
+	private val historyCompletedChip: PillChip = PillChip({ "Hoàn thành" }, Icons.check(18, T.Accent)) {
+		historyCompletedOnly = !historyCompletedOnly
+		historyCompletedChip.toggled = historyCompletedOnly
+		refreshHistory()
+	}
 	private val clearHistoryChip = PillChip({ "Xoá lịch sử" }, Icons.trash(18, T.OnBg)) { clearHistory() }
 
 	private val fab = ExtendedFab("Đọc tiếp", Icons.bookOpen(26, T.OnAccent)) { openMostRecent() }
@@ -116,9 +137,10 @@ class MainFrame(
 
 	private val nav = BottomNav(
 		listOf(
-			"Yêu thích" to { size: Int, color: java.awt.Color -> Icons.heart(size, color, filled = false) },
-			"Local" to { size: Int, color: java.awt.Color -> Icons.folder(size, color) },
 			"Lịch sử" to { size: Int, color: java.awt.Color -> Icons.clock(size, color) },
+			"Yêu thích" to { size: Int, color: java.awt.Color -> Icons.heart(size, color, filled = false) },
+			"Khám phá" to { size: Int, color: java.awt.Color -> Icons.compass(size, color) },
+			"Local" to { size: Int, color: java.awt.Color -> Icons.folder(size, color) },
 		),
 	) { index -> selectTab(index) }
 
@@ -150,25 +172,42 @@ class MainFrame(
 		topBar.add(overflowWrap, BorderLayout.EAST)
 		add(topBar, BorderLayout.NORTH)
 
-		// ---- screens (each with its own chip row)
-		cardStack.add(buildFavouritesScreen(), screenNames[0])
-		cardStack.add(buildScreen(chips(addFolderChip, addCbzChip, removeLocalChip), localGrid), screenNames[1])
-		cardStack.add(buildScreen(chips(clearHistoryChip), historyGrid), screenNames[2])
+		// ---- screens (each with its own chip row; Explore is the Android browse surface)
+		cardStack.add(buildScreen(chips(historyLocalOnlyChip, historyCompletedChip, clearHistoryChip), historyPanel), screenNames[TAB_HISTORY])
+		cardStack.add(buildScreen(chips(categoryChip), favouritesGrid), screenNames[TAB_FAVOURITES])
+		cardStack.add(explorePanel, screenNames[TAB_EXPLORE])
+		cardStack.add(buildScreen(chips(addFolderChip, addCbzChip), localGrid), screenNames[TAB_LOCAL])
 		add(centerPanel, BorderLayout.CENTER)
 
 		add(nav, BorderLayout.SOUTH)
 
 		refreshAll()
-		selectTab(0)
+		selectTab(TAB_HISTORY)
 	}
 
 	private fun selectTab(index: Int) {
 		queries[currentTab] = searchPill.query()
-		currentTab = index.coerceIn(0, grids.size - 1)
+		currentTab = index.coerceIn(0, TAB_COUNT - 1)
 		nav.selectedIndex = currentTab
 		(cardStack.layout as CardLayout).show(cardStack, screenNames[currentTab])
 		searchPill.setQuery(queries[currentTab])
-		grids[currentTab].setFilter(queries[currentTab])
+		applyFilterFor(currentTab, queries[currentTab])
+		syncFabVisibility()
+	}
+
+	private fun applyFilterFor(tab: Int, query: String) {
+		when (tab) {
+			TAB_EXPLORE -> explorePanel.setQuery(query)
+			TAB_HISTORY -> refreshHistory()
+			TAB_FAVOURITES -> favouritesGrid.setFilter(query)
+			TAB_LOCAL -> localGrid.setFilter(query)
+		}
+	}
+
+	private fun syncFabVisibility() {
+		fabRow.isVisible = currentTab == TAB_HISTORY && lastHistoryCount > 0
+		centerPanel.revalidate()
+		centerPanel.repaint()
 	}
 
 	// ------------------------------------------------------------ screens
@@ -180,15 +219,12 @@ class MainFrame(
 			chips.forEach { add(it) }
 		}
 
-	private fun buildScreen(chipRow: javax.swing.JPanel, grid: CoverGridPanel): javax.swing.JPanel =
+	private fun buildScreen(chipRow: javax.swing.JPanel?, content: javax.swing.JComponent): javax.swing.JPanel =
 		javax.swing.JPanel(BorderLayout()).apply {
 			isOpaque = false
-			add(chipRow, BorderLayout.NORTH)
-			add(grid, BorderLayout.CENTER)
+			chipRow?.let { add(it, BorderLayout.NORTH) }
+			add(content, BorderLayout.CENTER)
 		}
-
-	private fun buildFavouritesScreen(): javax.swing.JPanel =
-		buildScreen(chips(categoryChip, toggleFavouriteChip), favouritesGrid)
 
 	// ------------------------------------------------------------ menu
 
@@ -247,6 +283,10 @@ class MainFrame(
 		)
 	}
 
+	private fun infoDialog(message: String) {
+		JOptionPane.showMessageDialog(this, message, "Kotanix", JOptionPane.INFORMATION_MESSAGE)
+	}
+
 	// ------------------------------------------------------------ refresh
 
 	private fun historyPercent(m: Manga): Float? = historyStore.get(m.id)?.percent
@@ -256,6 +296,7 @@ class MainFrame(
 		refreshFavourites()
 		refreshLocal()
 		refreshHistory()
+		explorePanel.refreshData()
 	}
 
 	private fun refreshCategories() {
@@ -268,49 +309,79 @@ class MainFrame(
 	private fun refreshFavourites() {
 		val items = favouritesStore.getFavouriteManga(currentCategoryId).map { GridItem(it, historyPercent(it)) }
 		favouritesGrid.setItems(items)
+		favouritesGrid.setFilter(queries[TAB_FAVOURITES])
 	}
 
 	private fun refreshLocal() {
 		val pairs = mangaStore.findLocalManga()
 		val items = pairs.mapNotNull { (id, _) -> mangaStore.findById(id) }
 		localGrid.setItems(items.map { GridItem(it, historyPercent(it)) })
+		localGrid.setFilter(queries[TAB_LOCAL])
 	}
 
 	private fun refreshHistory() {
-		val entries = historyStore.getRecent(120)
-		historyGrid.setItems(entries.map { GridItem(it.manga, it.history.percent) })
-		fabRow.isVisible = entries.isNotEmpty()
-		centerPanel.revalidate()
-		centerPanel.repaint()
+		val all = historyStore.getRecent(120)
+		lastHistoryCount = all.size
+
+		var entries = all
+		val q = queries[TAB_HISTORY].trim().lowercase()
+		if (q.isNotEmpty()) {
+			entries = entries.filter {
+				it.manga.title.lowercase().contains(q) ||
+					it.manga.altTitles.any { alt -> alt.lowercase().contains(q) }
+			}
+		}
+		if (historyLocalOnly) entries = entries.filter { it.manga.source == LOCAL_SOURCE }
+		if (historyCompletedOnly) entries = entries.filter { it.history.percent >= 0.995f }
+
+		historyPanel.setItems(entries.map { HistoryCard(it.manga, it.history.percent, it.history.updatedAt) })
+		syncFabVisibility()
+	}
+
+	// ------------------------------------------------------------ details + reader
+
+	private fun openDetails(manga: Manga) {
+		val full = mangaStore.findById(manga.id) ?: manga
+		val path = mangaStore.getLocalPath(manga.id)
+		MangaDetailsDialog(
+			this, db, full, path,
+			onOpenReader = { m, chapter -> openReaderOrMessage(m, chapter) },
+			onFavouriteChanged = { refreshFavourites() },
+			onRemoveLocal = { removeLocalManga(it) },
+		).isVisible = true
+	}
+
+	private fun openReaderOrMessage(manga: Manga, chapterIndex: Int?): Boolean {
+		val path = mangaStore.getLocalPath(manga.id)
+		if (path != null && File(path).canRead()) {
+			ReaderFrame(db, manga, path, chapterIndex ?: -1)
+			return true
+		}
+		JOptionPane.showMessageDialog(
+			this,
+			"""“${manga.title}” không có bản local.
+
+			${if (manga.source == LOCAL_SOURCE) "Đường dẫn đã mất: $path" else "Nguồn ${manga.source} (online) chưa được port — Milestone M2."}""".trimIndent(),
+			"Chưa đọc được",
+			JOptionPane.INFORMATION_MESSAGE,
+		)
+		return false
+	}
+
+	private fun removeLocalManga(manga: Manga) {
+		db.exec("DELETE FROM local_index WHERE manga_id = ?", manga.id)
+		refreshAll()
+	}
+
+	private fun showBookmarks() {
+		BookmarksDialog(this, db) { manga -> openDetails(manga) }.isVisible = true
 	}
 
 	// ------------------------------------------------------------ actions
 
-	private fun openManga(manga: Manga) {
-		val path = mangaStore.getLocalPath(manga.id)
-		if (path != null && File(path).canRead()) {
-			ReaderFrame(db, manga, path)
-		} else {
-			JOptionPane.showMessageDialog(
-				this,
-				"""“${manga.title}” không có bản local.
-
-				${if (manga.source == LOCAL_SOURCE) "Đường dẫn đã mất: $path" else "Nguồn ${manga.source} (online) chưa được port — Milestone M2."}""".trimIndent(),
-				"Chưa đọc được",
-				JOptionPane.INFORMATION_MESSAGE,
-			)
-		}
-	}
-
 	private fun openMostRecent() {
 		val latest = historyStore.getRecent(1).firstOrNull()?.manga ?: return
-		openManga(latest)
-	}
-
-	private fun removeSelectedLocal() {
-		val manga = localGrid.selected() ?: return
-		db.exec("DELETE FROM local_index WHERE manga_id = ?", manga.id)
-		refreshLocal()
+		openReaderOrMessage(latest, null)
 	}
 
 	private fun clearHistory() {
@@ -414,7 +485,7 @@ class MainFrame(
 			manga
 		}
 		result.fold(
-			onSuccess = { refreshLocal() },
+			onSuccess = { refreshAll() },
 			onFailure = { e ->
 				JOptionPane.showMessageDialog(
 					this, "Không thêm được: ${e.message}", "Lỗi", JOptionPane.ERROR_MESSAGE,

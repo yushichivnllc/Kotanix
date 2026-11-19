@@ -27,6 +27,8 @@ class ReaderFrame(
 	private val db: SqliteDatabase,
 	private val manga: Manga,
 	localPath: String,
+	/** When >= 0, open this chapter at page 0 instead of resuming from history. */
+	private val startChapter: Int = -1,
 ) : JFrame(manga.title) {
 
 	private val history = HistoryStore(db)
@@ -149,10 +151,12 @@ class ReaderFrame(
 			setLocationRelativeTo(null)
 			isVisible = true
 		} else {
-			// Resume from history when possible
+			// Explicit chapter wins; otherwise resume from history when possible
 			val saved = history.get(manga.id)
-			val savedChapterIdx = saved?.let { s -> chapters.indexOfFirst { it.id == s.chapterId }.takeIf { it >= 0 } } ?: 0
-			val savedPage = saved?.takeIf { chapters.isNotEmpty() }?.page ?: 0
+			val savedChapterIdx = if (startChapter in chapters.indices) startChapter
+				else saved?.let { s -> chapters.indexOfFirst { it.id == s.chapterId }.takeIf { it >= 0 } } ?: 0
+			val savedPage = if (startChapter in chapters.indices) 0
+				else saved?.takeIf { chapters.isNotEmpty() }?.page ?: 0
 
 			setSize(920, 720)
 			setLocationRelativeTo(null)

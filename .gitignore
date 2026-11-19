@@ -40,3 +40,4 @@ __pycache__/
 
 # Local toolchain installed by tools/setup-toolchain.sh (re-installable, not for VCS)
 /kotanix/.toolchain/
+/.toolchain/
