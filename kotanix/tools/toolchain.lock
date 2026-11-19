@@ -1,0 +1,12 @@
+# Toolchain ghim cho Kotanix — sha256 để setup-toolchain.sh xác minh trước khi dùng.
+# KHÔNG nâng version ở đây mà không build + test lại từ đầu.
+
+JDK4PY_VERSION=21.0.8.2
+JDK4PY_URL=https://files.pythonhosted.org/packages/a2/61/f3b5936908ff6de66c61aef69bf1074cb468fb883f5a0bb9e15e67a6b484/jdk4py-21.0.8.2-py3-none-manylinux_2_17_x86_64.whl
+JDK4PY_SHA256=85addfcb57c7051dad6145b9f816fc519337e9a0c705ef01edc9dc7818ee0356
+JDK4PY_JAVA_HOME_SUFFIX=jdk4py/java-runtime
+
+KOTLINC_VERSION=2.2.10
+KOTLINC_URL=https://registry.npmjs.org/kotlin-compiler/-/kotlin-compiler-2.2.10.tgz
+KOTLINC_SHA256=cec7d5a867deddd2d61d60f2890262cb30b9b9fc7e32cdb33aeaf8abb2bf88cb
+KOTLINC_DIR_SUFFIX=package
