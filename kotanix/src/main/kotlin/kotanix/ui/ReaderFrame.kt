@@ -7,6 +7,7 @@ import kotanix.core.HistoryEntry
 import kotanix.data.HistoryStore
 import kotanix.data.SqliteDatabase
 import kotanix.local.LocalMangaParser
+import kotanix.local.PageFormats
 import java.awt.BorderLayout
 import java.awt.Color
 import java.awt.Dimension
@@ -64,6 +65,14 @@ class ReaderFrame(
 		font = T.font(12f)
 		border = EmptyBorder(4, 16, 4, 16)
 	}
+	
+	/** Shown while the chapter contains pages the runtime cannot decode (e.g. WebP) — never hidden silently. */
+	private val formatBanner = JLabel().apply {
+		foreground = java.awt.Color(0xE8B54D) // warning amber on black canvas
+		font = T.font(11f, bold = true)
+		border = EmptyBorder(6, 16, 0, 16)
+		isVisible = false
+	}
 	private val progress = ReadingProgressBar()
 
 	private val prevChapter = IconButton({ size -> Icons.skipPrevious(size, T.OnBg) }, 40) { gotoChapter(chapterIndex - 1, 0) }
@@ -99,6 +108,7 @@ class ReaderFrame(
 		val canvas = javax.swing.JPanel(BorderLayout()).apply {
 			background = Color(0x000000)
 			add(imageLabel, BorderLayout.CENTER)
+			add(formatBanner, BorderLayout.NORTH)
 			add(errorLabel, BorderLayout.SOUTH)
 		}
 		imageLabel.addMouseListener(object : java.awt.event.MouseAdapter() {
@@ -172,9 +182,29 @@ class ReaderFrame(
 		chapterLabel.text = chapter.title ?: "Chapter ${index + 1}"
 		pages = parser?.getPages(chapter).orEmpty()
 		errorLabel.text = if (pages.isEmpty()) "Chapter này không có ảnh." else ""
+		updateFormatBanner()
 		pageIndex = page.coerceIn(0, (pages.size - 1).coerceAtLeast(0))
 		renderPage()
 		persistHistory()
+	}
+
+	/** Persistent per-chapter warning: which/how many pages cannot be decoded by the runtime. Stays visible until the chapter changes. */
+	private fun updateFormatBanner() {
+		val names = pages.map { it.url.substringAfterLast('!', it.url).substringAfterLast('/').substringAfterLast('\\') }
+		val unsupported = PageFormats.unsupportedSummary(names)
+		if (unsupported.isEmpty()) {
+			formatBanner.isVisible = false
+			return
+		}
+		val totalUnsupported = unsupported.values.sum()
+		val detail = unsupported.entries.joinToString(", ") { (fmt, count) -> "$count× $fmt" }
+		formatBanner.text = "⚠ $totalUnsupported/${pages.size} trang không giải mã được: $detail — sẽ không hiển thị"
+		formatBanner.toolTipText = "<html>Kotanix (JVM) chưa có bộ giải mã cho các định dạng này — ảnh vẫn được liệt kê nhưng không hiển thị.<br>" +
+			"Cách xử lý: chuyển ảnh sang PNG hoặc JPG rồi đọc lại, ví dụ<br>" +
+			"• ImageMagick: <code>mogrify -format png *.webp</code><br>" +
+			"• XnConvert / IrfanView (miễn phí)<br>" +
+			"Hỗ trợ WebP/AVIF nằm trong lộ trình (Milestone M2+); xem STATUS.md.</html>"
+		formatBanner.isVisible = true
 	}
 
 	private fun gotoPage(index: Int) {
@@ -210,13 +240,23 @@ class ReaderFrame(
 		nextChapter.isEnabled = chapterIndex < chapters.size - 1
 
 		val page = pages.getOrNull(pageIndex) ?: run { imageLabel.icon = null; return }
-		val img: BufferedImage? = runCatching {
-			val bytes = parser?.readPage(page) ?: return
-			ImageIO.read(ByteArrayInputStream(bytes))
-		}.getOrNull()
+		var decodeFailed: String? = null
+		val img: BufferedImage? = run {
+			val bytes = runCatching { parser?.readPage(page) }
+				.getOrElse { e ->
+					decodeFailed = "lỗi đọc file (${e.message ?: e.javaClass.simpleName})"
+					null
+				}
+			bytes?.let { pageBytes ->
+				runCatching { ImageIO.read(ByteArrayInputStream(pageBytes)) }.getOrElse {
+					decodeFailed = "không giải mã được ảnh ${PageFormats.label(page.url, pageBytes)}"
+					null
+				}
+			}
+		}
 
 		if (img == null) {
-			errorLabel.text = "Không đọc được trang ${pageIndex + 1}"
+			errorLabel.text = "Trang ${pageIndex + 1}: ${decodeFailed ?: "không đọc được"}"
 			imageLabel.icon = null
 			return
 		}
