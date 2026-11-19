@@ -14,7 +14,7 @@ M2 UI+online, M3 packaging).
 | History/Favourites stores | `kotanix/data/HistoryStore.kt`, `FavouritesStore.kt`, `MangaStore.kt` | **XONG** | kiểm bằng smoke tests |
 | Đọc local: `LocalMangaParser` (folder/cbz/nest) | `kotanix/local/LocalMangaParser.kt` | **XONG** | kiểm 4 layout + natural order |
 | Local reading UI (reader, gestures) | `kotanix/ui/ReaderFrame.kt` | **MỘT PHẦN** | Swing; reader page-by-page, ←/→/ESC; không có gesture/zoom/mode ngang; chưa render trên màn hình thật |
-| Screens (home/feed/details/search…) Compose | `kotanix/ui/{MainFrame,CoverGridPanel,CoverLoader,Theme,Icons,BottomNav,HistorySectionsPanel,ExplorePanel,MangaDetailsDialog,BookmarksDialog}.kt` | **MỘT PHẦN** | Swing dark phong cách Kotatsu Android; 4 tabs (Lịch sử/Yêu thích/Khám phá/Local), history gom nhóm theo ngày, Explore (tiles local + gợi ý local + nguồn trong DB), details screen, bookmarks; tap card = details; headless render OK (6 màn hình); pixels chưa kiểm trên desktop thật; Feed/Suggestions/Downloads CHƯA port (online) |
+| Screens (home/feed/details/search…) Compose | `kotanix/ui/{MainFrame,CoverGridPanel,CoverLoader,Theme,Icons,BottomNav,HistorySectionsPanel,ExplorePanel,MangaDetailsDialog,BookmarksDialog,SourcesCatalogDialog,SourceTile}.kt` | **MỘT PHẦN** | Swing dark phong cách Kotatsu Android; 4 tabs (Lịch sử/Yêu thích/Khám phá/Local), history gom nhóm theo ngày, Explore (tiles local + gợi ý local + nguồn ghim + **danh mục nguồn online 1386 mục, read-only**), details screen, bookmarks; tap card = details; headless render OK (7 màn hình); pixels chưa kiểm trên desktop thật; Feed/Suggestions/Downloads/online CHƯA port |
 | `.deb` packaging (M3) | `tools/package-deb.sh`, `packaging/` | **XONG (chưa cài thật)** | dpkg-deb; staged install kiểm bằng JRE bundle; `sudo dpkg -i` chưa kiểm |
 | `.AppImage` (M3) | `tools/package-appimage.sh`, `packaging/kotanix-apprun` | **XONG (kiểm chạy được)** | build từ source ghim (§9 UPSTREAM.lock); selftest qua FUSE + extract-and-run đều OK; GUI/sign/updateinfo chưa làm |
 | kotatsu-parsers-redo @ `3432a85a` | — | **CHẶN (một phần)** | okhttp ✓; org.json/jsoup là Java thuần, không javac → xem STATUS.md §5 |
@@ -28,7 +28,14 @@ M2 UI+online, M3 packaging).
 - Mọi nguồn parser online đều dựa vào HTTP (okhttp) + HTML parsing (jsoup hoặc tương đương).
   Trong môi trường build này, jsoup không build/không xác minh được ⇒ **mọi nguồn online
   đều ở trạng thái CHẶN** cho đến khi giải quyết M2 hoặc người dùng cung cấp artifact xác minh.
-- Không có mã parser nào được copy vào Kotanix ở thời điểm hiện tại.
+- Không có mã parser nào được copy vào Kotanix ở thời điểm hiện tại. **Chỉ dữ liệu factual
+  của danh mục nguồn** (tên/tiêu đề/locale/loại/cờ hỏng — \`online/SourceCatalog.kt\`, sinh từ
+  kotatsu-parsers-redo @ `3432a85ac0`, GPL-3.0) được nhúng để hiển thị trình duyệt danh mục
+  read-only trong tab Khám phá (pin/unpin, lưu bảng \`sources\`). Online KHÔNG đọc được.
+- Lưu ý định kiến: **keiyoushi (Mihon extensions) KHÔNG dùng được trong Kotanix** — chúng là
+  APK Android nói chuyện với runtime Mihon/Tachiyomi, khác hoàn toàn kiến trúc parser của
+  Kotatsu. Không thể "nhập" kho keiyoushi vào Kotanix; đường tương thích duy nhất là catalog
+  kotatsu-parsers của chính Kotatsu.
 
 ## Nguyên tắc giữ nguyên
 

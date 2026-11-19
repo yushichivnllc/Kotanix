@@ -11,7 +11,7 @@ source gốc tương ứng (cũng được copy kèm JAR dưới tên `*.LICENSE
 | Thành phần | Phiên bản / revision | License | Bản quyền |
 |---|---|---|---|
 | Kotatsu-Redo for Android (upstream tham chiếu, cơ sở của port) | Tag `9.8.7`, commit `9ef70777557e96c136c767b136a3022f7aff9dc4` | GPL-3.0 | The Kotatsu-Redo authors |
-| kotatsu-parsers-redo (nguồn tham chiếu cho phần parser, CHƯA được copy mã vào Kotanix) | commit `3432a85ac02ce99824cf841aca40bfd3af78ed3f` | Apache-2.0 | The kotatsu-parsers authors |
+| kotatsu-parsers-redo (dữ liệu danh mục nguồn nhúng dưới dạng `SourceCatalog.kt` — CHỈ dữ liệu factual: tên/tiêu đề/locale/loại nội dung/cờ hỏng; KHÔNG có mã parser) | commit `3432a85ac02ce99824cf841aca40bfd3af78ed3f` | GPL-3.0 | The kotatsu-parsers authors |
 | okio (build offline) | 3.16.0, tag `parent-3.16.0` | Apache-2.0 | Square, Inc. / The Okio authors |
 | okhttp (build offline) | 5.1.0, tag `parent-5.1.0` | Apache-2.0 | Square, Inc. / The OkHttp authors |
 | androidx.collection (build offline) | `COLLECTION = "1.8.0-alpha01"` @ `cfa6d5ad3e...` — **lệch với pin 1.5.0, xem UPSTREAM.lock §7** | Apache-2.0 | The Android Open Source Project |
@@ -30,6 +30,11 @@ Ghi chú:
   không có mã nguồn thật của các dự án đó trong repo Kotanix.
 - `thirdparty/androidx-collection-overlay/` là bản port Kotlin của 3 file Java thuộc
   androidx.collection (Apache-2.0), kèm stub `androidx.annotation` tối thiểu cho compile.
+- `kotanix/src/main/kotlin/kotanix/online/SourceCatalog.kt` được sinh tự động từ danh sách
+  `@MangaSourceParser` của kotatsu-parsers-redo tại đúng commit ghim ở trên (generator:
+  `tools/gen-source-catalog.py`). Nó chứa dữ liệu factual (tên/tiêu đề nguồn), không chứa mã
+  parser; tái sinh lại bằng generator với `UPSTREAM.lock` §2 cho cùng một revision thì cho
+  kết quả byte-identical. Code parser KHÔNG được copy vào Kotanix.
 - File `.deb` phân phối kèm JAR của 3 thư viện build offline ở trên (okio, okhttp,
   androidx.collection) với license gốc của chúng, theo đúng yêu cầu attribution của
   Apache-2.0 (§4(d)) và GPL-3.0 (§5). GPL-3.0 tương thích với Apache-2.0.

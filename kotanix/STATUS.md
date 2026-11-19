@@ -63,6 +63,16 @@ quá bằng chứng trong repo hoặc output test thật. Quy ước trạng th�
   - `kotanix/ui/MangaDetailsDialog.kt` — **màn details (shot 2)**: back arrow + overflow ⋮ (mở thư mục chứa / gỡ khỏi thư viện local / sao chép tiêu đề), cover lớn bo tròn + title + alt title, pill “Yêu thích” (toggle, không có dropdown chọn category — đơn giản hoá), info card (Nguồn / Tác giả / Tình trạng / Chapters / Tiến độ với progress bar accent + %), mô tả, chips thể loại, danh sách chapter đảo ngược (click = mở reader ở chapter đó), CTA “Đọc tiếp” accent. Field online-only hiện “—” khi không có dữ liệu; nguồn online chỉ hiện khi có trong backup.
   - `kotanix/ui/BookmarksDialog.kt` — **Dấu trang (phần bookmarks của shot 3 tile)**: list bản ghi bookmarks từ DB (cover + title + percent + ngày); click mở reader (resume từ history — **chưa** restore đúng trang bookmark, vì ReaderFrame chưa đọc bookmark khi mở).
   - `kotanix/ui/MangaDetailsDialog.kt` chia làm `MangaDetailsContent` (panel) + `MangaDetailsDialog` (shell) và `BookmarksDialog` chia làm `BookmarksContent` (panel) — để headless render kiểm thử được mà không cần X11.
+  - `kotanix/online/SourceCatalog.kt` (SINH TỰ ĐỘNG từ kotatsu-parsers-redo @ `3432a85ac0`, generator
+    `tools/gen-source-catalog.py`) — **danh mục 1386 nguồn online** (dữ liệu factual, gồm 63 nguồn
+    tiếng Việt và cờ `isBroken` của upstream). Tab Khám phá có lưới nguồn + link “Tất cả 1386 nguồn”
+    mở `SourcesCatalogDialog`: lọc theo từ khoá (bỏ dấu), lọc theo ngôn ngữ, ẩn/hiện nội dung người
+    lớn (mặc định ẩn), bấm nguồn → thông báo online CHƯA port (M2), bấm góc ghim để ghim/bỏ ghim
+    (lưu bảng `sources`, tương thích backup). **Online vẫn CHƯA đọc được — danh mục chỉ để xem/ghim.**
+    Nguồn bị hỏng hiển thị mờ. Ảnh render headless: `SourcesCatalogContent` (880×640).
+  - `kotanix/ui/SourceTile.kt` — tile nguồn dùng chung (glyph chữ cái, pin, trạng thái hỏng/cũ) cho
+    cả màn danh mục lẫn section “Nguồn truyện” của tab Khám phá (pinned hiển thị trước; fallback
+    về roll-up nguồn trong DB như trước khi chưa có ghim).
   - `kotanix/ui/ReaderFrame.kt` — reader local (không đổi): lật trang CHƯƠNG/TOC, phím ←/→/ESC, progressbar, ghi history mỗi lần lật trang, resume; nhận tham số `startChapter` (từ details/chapter click).
   - `kotanix/ui/FillWidthPanel` (trong `Theme.kt`) — container GridBag một cột có `Scrollable.tracksViewportWidth` (BoxLayout thiếu điều này + unparented components orientation UNKNOWN ⇒ headless render lệch trái/phải; GridBag + NORTHWEST anchor deterministic).
 - **Đơn giản hoá có chủ đích so với Android** (không làm giả): bottom nav 4 tab thay vì 5 (Feed RSS và Suggestions là tính năng online, chưa có backend — tab Local chiếm vị trí); nút “Tải xuống” hiện notice “chưa được port”; không có download manager; không có source catalog online (chỉ roll-up nguồn trong DB); suggestions là local; “Đọc tiếp” mở thẳng most-recent history; details không có dropdown category favourite; reader không có bottom-sheet tuỳ chọn (sẽ làm khi port reader options).
