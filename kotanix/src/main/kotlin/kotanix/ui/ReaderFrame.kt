@@ -1,6 +1,5 @@
 package kotanix.ui
 
-import kotanix.core.LOCAL_SOURCE
 import kotanix.core.Manga
 import kotanix.core.MangaChapter
 import kotanix.core.MangaPage
@@ -18,9 +17,11 @@ import javax.swing.*
 import javax.swing.border.EmptyBorder
 
 /**
- * Page reader for LOCAL manga (folder / CBZ / nested CBZ). Rendering is plain Swing —
- * each page is decoded on demand and scaled to fit the window. History is written on every
- * page turn (created_at preserved across sessions, matching Android Kotatsu semantics).
+ * Page reader for LOCAL manga (folder / CBZ / nested CBZ) — Kotatsu's immersive reader look:
+ * black canvas, full-page image, minimal chrome. ‹ › / arrow keys turn pages, ESC exits.
+ * Top bar shows back + title/chapter; bottom bar shows page position and chapter navigation;
+ * a thin accent progress line tracks overall percent. History is written on every page turn
+ * (created_at preserved across sessions, matching Android Kotatsu semantics).
  */
 class ReaderFrame(
 	private val db: SqliteDatabase,
@@ -40,49 +41,90 @@ class ReaderFrame(
 	private val imageLabel = JLabel().apply {
 		horizontalAlignment = SwingConstants.CENTER
 		verticalAlignment = SwingConstants.CENTER
+		background = Color(0x000000)
+		isOpaque = true
 	}
 
-	private val pageLabel = JLabel("– / –").apply { foreground = Color(0xE8E3D8) }
-	private val chapterLabel = JLabel("–").apply { foreground = Color(0x9AA5B1); font = font.deriveFont(11f) }
-	private val errorLabel = JLabel().apply { foreground = Color(0xFF9E9E); border = EmptyBorder(8, 12, 8, 12) }
+	private val pageLabel = JLabel("– / –").apply {
+		foreground = T.OnBg
+		font = T.font(15f, bold = true)
+	}
+	private val chapterLabel = JLabel("–").apply {
+		foreground = T.Dim
+		font = T.font(11f)
+	}
+	private val titleLabel = JLabel(manga.title).apply {
+		foreground = T.OnBg
+		font = T.font(14f, bold = true)
+	}
+	private val errorLabel = JLabel().apply {
+		foreground = T.Error
+		font = T.font(12f)
+		border = EmptyBorder(4, 16, 4, 16)
+	}
+	private val progress = ReadingProgressBar()
 
-	private val prevChapter = JButton("⟨ Ch").apply { toolTipText = "Chapter trước" }
-	private val prevPage = JButton("⟨ Trang").apply { toolTipText = "Trang trước (←)" }
-	private val nextPage = JButton("Trang ⟩").apply { toolTipText = "Trang sau (→)" }
-	private val nextChapter = JButton("Ch ⟩").apply { toolTipText = "Chapter tiếp theo" }
+	private val prevChapter = IconButton({ size -> Icons.skipPrevious(size, T.OnBg) }, 40) { gotoChapter(chapterIndex - 1, 0) }
+	private val prevPage = IconButton({ size -> Icons.chevronLeft(size, T.OnBg) }, 40) { gotoPage(pageIndex - 1) }
+	private val nextPage = IconButton({ size -> Icons.chevronRight(size, T.OnBg) }, 40) { gotoPage(pageIndex + 1) }
+	private val nextChapter = IconButton({ size -> Icons.skipNext(size, T.OnBg) }, 40) { gotoChapter(chapterIndex + 1, 0) }
 
 	init {
 		defaultCloseOperation = DISPOSE_ON_CLOSE
 		minimumSize = Dimension(760, 560)
 		layout = BorderLayout()
-		background = Color(0x14171C)
+		background = Color(0x000000)
+		contentPane.background = Color(0x000000)
 
+		// ---- top bar (Kotatsu style: back arrow + two-line title)
+		val back = IconButton({ size -> Icons.backArrow(size, T.OnBg) }, 44) { dispose() }
+		val titles = JPanel().apply {
+			layout = javax.swing.BoxLayout(this, javax.swing.BoxLayout.Y_AXIS)
+			isOpaque = false
+			add(titleLabel)
+			add(chapterLabel)
+		}
 		val top = JPanel(BorderLayout()).apply {
-			background = Color(0x1B1F26)
-			border = EmptyBorder(6, 8, 6, 8)
-			add(chapterLabel, BorderLayout.WEST)
+			background = Color(0x0B1013)
+			border = EmptyBorder(8, 8, 8, 16)
+			add(back, BorderLayout.WEST)
+			add(titles, BorderLayout.CENTER)
 			add(pageLabel, BorderLayout.EAST)
 		}
 		add(top, BorderLayout.NORTH)
 
-		val center = JPanel(BorderLayout()).apply {
-			background = Color(0x14171C)
+		// ---- page canvas (tap left/right third to turn pages)
+		val canvas = javax.swing.JPanel(BorderLayout()).apply {
+			background = Color(0x000000)
 			add(imageLabel, BorderLayout.CENTER)
 			add(errorLabel, BorderLayout.SOUTH)
 		}
-		add(center, BorderLayout.CENTER)
+		imageLabel.addMouseListener(object : java.awt.event.MouseAdapter() {
+			override fun mouseClicked(e: java.awt.event.MouseEvent) {
+				val third = imageLabel.width / 3
+				when {
+					e.x < third -> gotoPage(pageIndex - 1)
+					e.x >= 2 * third -> gotoPage(pageIndex + 1)
+					else -> Unit
+				}
+			}
+		})
+		add(canvas, BorderLayout.CENTER)
 
-		val bottom = JPanel().apply {
-			background = Color(0x1B1F26)
-			border = EmptyBorder(6, 8, 6, 8)
-			add(prevChapter); add(prevPage); add(nextPage); add(nextChapter)
+		// ---- bottom bar: chapter navigation + page indicator, plus accent progress line
+		val bottom = JPanel(java.awt.FlowLayout(java.awt.FlowLayout.CENTER, 18, 6)).apply {
+			background = Color(0x0B1013)
+			add(prevChapter)
+			add(prevPage)
+			add(nextPage)
+			add(nextChapter)
 		}
-		add(bottom, BorderLayout.SOUTH)
-
-		prevChapter.addActionListener { gotoChapter(chapterIndex - 1, page = 0) }
-		nextChapter.addActionListener { gotoChapter(chapterIndex + 1, page = 0) }
-		prevPage.addActionListener { gotoPage(pageIndex - 1) }
-		nextPage.addActionListener { gotoPage(pageIndex + 1) }
+		val south = JPanel(BorderLayout()).apply {
+			isOpaque = false
+			add(bottom, BorderLayout.CENTER)
+			add(progress, BorderLayout.SOUTH)
+		}
+		add(south, BorderLayout.SOUTH)
 
 		rootPane.inputMap.put(KeyStroke.getKeyStroke("LEFT"), "prev")
 		rootPane.inputMap.put(KeyStroke.getKeyStroke("RIGHT"), "next")
@@ -107,7 +149,6 @@ class ReaderFrame(
 			setLocationRelativeTo(null)
 			isVisible = true
 		} else {
-
 			// Resume from history when possible
 			val saved = history.get(manga.id)
 			val savedChapterIdx = saved?.let { s -> chapters.indexOfFirst { it.id == s.chapterId }.takeIf { it >= 0 } } ?: 0
@@ -144,8 +185,8 @@ class ReaderFrame(
 		val percent = if (pages.size > 1) pageIndex.toFloat() / (pages.size - 1) else 1f
 		history.upsert(
 			HistoryEntry(
-				mangaId = chaptersMangaId(),
-				createdAt = history.get(chaptersMangaId())?.createdAt ?: System.currentTimeMillis(),
+				mangaId = manga.id,
+				createdAt = history.get(manga.id)?.createdAt ?: System.currentTimeMillis(),
 				updatedAt = System.currentTimeMillis(),
 				chapterId = chapter.id,
 				page = pageIndex,
@@ -156,10 +197,9 @@ class ReaderFrame(
 		)
 	}
 
-	private fun chaptersMangaId(): Long = manga.id
-
 	private fun renderPage() {
 		pageLabel.text = if (pages.isEmpty()) "– / –" else "${pageIndex + 1} / ${pages.size}"
+		progress.percent = if (pages.isEmpty()) 0f else (if (pages.size > 1) pageIndex.toFloat() / (pages.size - 1) else 1f)
 		prevPage.isEnabled = pageIndex > 0
 		nextPage.isEnabled = pageIndex < pages.size - 1
 		prevChapter.isEnabled = chapterIndex > 0
@@ -179,5 +219,27 @@ class ReaderFrame(
 		errorLabel.text = ""
 		val size = imageLabel.size.takeIf { it.width > 10 && it.height > 10 } ?: Dimension(800, 600)
 		imageLabel.icon = ImageIcon(Placeholder.scaledTo(img, size.width, size.height))
+	}
+}
+
+/** Thin accent progress line docked at the bottom of the reader. */
+private class ReadingProgressBar : javax.swing.JComponent() {
+	var percent: Float = 0f
+		set(value) {
+			field = value.coerceIn(0f, 1f)
+			repaint()
+		}
+
+	init {
+		isOpaque = false
+		preferredSize = Dimension(0, 3)
+		minimumSize = Dimension(0, 3)
+	}
+
+	override fun paintComponent(g: java.awt.Graphics) {
+		g.color = T.Outline
+		g.fillRect(0, 0, width, height)
+		g.color = T.Accent
+		g.fillRect(0, 0, (width * percent).toInt(), height)
 	}
 }

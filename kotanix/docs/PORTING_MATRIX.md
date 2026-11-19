@@ -14,7 +14,7 @@ M2 UI+online, M3 packaging).
 | History/Favourites stores | `kotanix/data/HistoryStore.kt`, `FavouritesStore.kt`, `MangaStore.kt` | **XONG** | kiểm bằng smoke tests |
 | Đọc local: `LocalMangaParser` (folder/cbz/nest) | `kotanix/local/LocalMangaParser.kt` | **XONG** | kiểm 4 layout + natural order |
 | Local reading UI (reader, gestures) | `kotanix/ui/ReaderFrame.kt` | **MỘT PHẦN** | Swing; reader page-by-page, ←/→/ESC; không có gesture/zoom/mode ngang; chưa render trên màn hình thật |
-| Screens (home/feed/details/search…) Compose | `kotanix/ui/{MainFrame,MangaListPanel,CoverLoader,Placeholder}.kt` | **MỘT PHẦN** | Swing, tab Favourites/Local/History; hiển thị + duyệt local OK theo unit test; pixels chưa kiểm trên desktop thật |
+| Screens (home/feed/details/search…) Compose | `kotanix/ui/{MainFrame,CoverGridPanel,CoverLoader,Theme,Icons,BottomNav}.kt` | **MỘT PHẦN** | Swing dark phong cách Kotatsu Android; Favourites/Local/History tabs, cover grid + progress badge + FAB; headless component render OK; pixels chưa kiểm trên desktop thật |
 | `.deb` packaging (M3) | `tools/package-deb.sh`, `packaging/` | **XONG (chưa cài thật)** | dpkg-deb; staged install kiểm bằng JRE bundle; `sudo dpkg -i` chưa kiểm |
 | `.AppImage` (M3) | `tools/package-appimage.sh`, `packaging/kotanix-apprun` | **XONG (kiểm chạy được)** | build từ source ghim (§9 UPSTREAM.lock); selftest qua FUSE + extract-and-run đều OK; GUI/sign/updateinfo chưa làm |
 | kotatsu-parsers-redo @ `3432a85a` | — | **CHẶN (một phần)** | okhttp ✓; org.json/jsoup là Java thuần, không javac → xem STATUS.md §5 |

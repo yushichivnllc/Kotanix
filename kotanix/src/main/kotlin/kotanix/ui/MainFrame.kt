@@ -3,13 +3,11 @@ package kotanix.ui
 import kotanix.backup.Backup
 import kotanix.core.LOCAL_SOURCE
 import kotanix.core.Manga
-import kotanix.core.MangaChapter
 import kotanix.data.*
 import kotanix.local.LocalMangaParser
 import java.awt.BorderLayout
-import java.awt.Color
+import java.awt.CardLayout
 import java.awt.Dimension
-import java.awt.FlowLayout
 import java.io.File
 import java.io.FileInputStream
 import javax.swing.JOptionPane
@@ -17,8 +15,10 @@ import javax.swing.UIManager
 import javax.swing.filechooser.FileNameExtensionFilter
 
 /**
- * Three tabs — Favourites (from the restored backup or later toggles), Local (folder/CBZ
- * library on disk) and History (recently read). Import/export of `.bak` lives in the menu.
+ * Kotanix main window — Kotatsu-Redo's dark look translated to Swing: black background,
+ * pill search bar, cover grid, Material-3 bottom navigation and an extended FAB.
+ * Favourites / Local / History tabs; backup import/export and library actions live in the
+ * overflow (⋮) menu and per-tab chips (no desktop menu bar, like Android).
  */
 class KotanixApp {
 
@@ -30,6 +30,23 @@ class KotanixApp {
 		} catch (_: Exception) {
 			// fall back to the default look and feel
 		}
+		// dark scrollbars + popups so the native chrome matches the theme
+		UIManager.put("ScrollBar.thumb", T.SurfaceHigh)
+		UIManager.put("ScrollBar.thumbDarkShadow", T.SurfaceHigh)
+		UIManager.put("ScrollBar.thumbHighlight", T.SurfaceHigh)
+		UIManager.put("ScrollBar.thumbShadow", T.SurfaceHigh)
+		UIManager.put("ScrollBar.track", T.Bg)
+		UIManager.put("ScrollBar.background", T.Bg)
+		UIManager.put("PopupMenu.background", T.SurfaceHigh)
+		UIManager.put("MenuItem.background", T.SurfaceHigh)
+		UIManager.put("MenuItem.foreground", T.OnBg)
+		UIManager.put("MenuItem.selectionBackground", T.SurfaceSelected)
+		UIManager.put("MenuItem.selectionForeground", T.Accent)
+		UIManager.put("OptionPane.background", T.SurfaceHigh)
+		UIManager.put("Panel.background", T.SurfaceHigh)
+		UIManager.put("TextField.background", T.Surface)
+		UIManager.put("TextField.foreground", T.OnBg)
+
 		val db = AppPaths.openDatabase()
 		main = MainFrame(db)
 		main.isVisible = true
@@ -44,69 +61,175 @@ class MainFrame(
 	private val favouritesStore = FavouritesStore(db)
 	private val historyStore = HistoryStore(db)
 
-	private val favouritesList = MangaListPanel(::openManga)
-	private val localList = MangaListPanel(::openManga)
-	private val historyList = MangaListPanel(::openManga)
+	private val favouritesGrid = CoverGridPanel("Chưa có manga yêu thích.\nMở một bộ truyện rồi bấm “Toggle yêu thích”.") { openManga(it) }
+	private val localGrid = CoverGridPanel("Chưa có manga local.\nBấm “Thêm thư mục…” hoặc “Thêm CBZ…” phía trên.") { openManga(it) }
+	private val historyGrid = CoverGridPanel("Chưa có lịch sử đọc.") { openManga(it) }
+	private val grids = listOf(favouritesGrid, localGrid, historyGrid)
 
-	private val categoryBox = javax.swing.JComboBox<CategoryItem>()
+	private val screenNames = listOf("favourites", "local", "history")
+	private val queries = arrayOf("", "", "")
+	private var currentTab = 0
+
+	private val cardStack = javax.swing.JPanel(CardLayout()).apply { background = T.Bg }
+	private val searchPill = SearchPill("Tìm manga…") { q ->
+		queries[currentTab] = q
+		grids[currentTab].setFilter(q)
+	}
+
+	// favourites chips
+	private var currentCategoryId: Long = 1L
+	private var currentCategoryTitle: String = "Thư viện"
+	private val categoryChip = PillChip({ "Danh mục: $currentCategoryTitle  ▾" }) { showCategoryMenu() }
+	private val toggleFavouriteChip = PillChip({ "Toggle yêu thích" }, Icons.heart(18, T.Accent, filled = true)) {
+		favouritesGrid.selected()?.let {
+			favouritesStore.toggleFavourite(it.id, currentCategoryId)
+			refreshFavourites()
+		}
+	}
+
+	// local chips
+	private val addFolderChip = PillChip({ "Thêm thư mục…" }, Icons.folder(18, T.OnBg)) { importLocalManga(folder = true) }
+	private val addCbzChip = PillChip({ "Thêm CBZ…" }, Icons.filePlus(18, T.OnBg)) { importLocalManga(folder = false) }
+	private val removeLocalChip = PillChip({ "Gỡ khỏi local" }, Icons.trash(18, T.OnBg)) { removeSelectedLocal() }
+
+	// history chips
+	private val clearHistoryChip = PillChip({ "Xoá lịch sử" }, Icons.trash(18, T.OnBg)) { clearHistory() }
+
+	private val fab = ExtendedFab("Đọc tiếp", Icons.bookOpen(26, T.OnAccent)) { openMostRecent() }
+
+	// FAB sits in a right-aligned transparent row above the bottom navigation.
+	// Keep this a plain BorderLayout child: in this codebase a null-layout
+	// container only ever paints its FIRST child (found the hard way — card stack
+	// painted, the FAB on top of it silently vanished). No overlapping children.
+	private val fabRow = javax.swing.JPanel(java.awt.FlowLayout(java.awt.FlowLayout.RIGHT, 0, 0)).apply {
+		isOpaque = false
+		border = javax.swing.border.EmptyBorder(0, 12, 12, 16)
+		add(fab)
+	}
+
+	private val centerPanel = javax.swing.JPanel(BorderLayout()).apply {
+		isOpaque = true
+		background = T.Bg
+		add(cardStack, BorderLayout.CENTER)
+		add(fabRow, BorderLayout.SOUTH)
+	}
+
+	private val nav = BottomNav(
+		listOf(
+			"Yêu thích" to { size: Int, color: java.awt.Color -> Icons.heart(size, color, filled = false) },
+			"Local" to { size: Int, color: java.awt.Color -> Icons.folder(size, color) },
+			"Lịch sử" to { size: Int, color: java.awt.Color -> Icons.clock(size, color) },
+		),
+	) { index -> selectTab(index) }
 
 	init {
 		defaultCloseOperation = EXIT_ON_CLOSE
 		minimumSize = Dimension(880, 560)
-		setSize(1120, 720)
+		setSize(1180, 740)
 		setLocationRelativeTo(null)
 
 		iconImage = runCatching {
 			javaClass.getResource("/icons/kotanix-64.png")?.let { javax.imageio.ImageIO.read(it) }
 		}.getOrNull() ?: iconImageFromPlaceholder()
 
-		jMenuBar = buildMenuBar()
+		contentPane.background = T.Bg
+		layout = BorderLayout()
 
-		val tabs = javax.swing.JTabbedPane()
-		tabs.addTab("Yêu thích", buildFavouritesTab())
-		tabs.addTab("Local", buildLocalTab())
-		tabs.addTab("Lịch sử", buildHistoryTab())
-		tabs.border = javax.swing.border.EmptyBorder(0, 0, 0, 0)
-		tabs.background = Color(0x1B1F26)
-		contentPane = tabs
-		tabs.addChangeListener { refreshAll() }
+		// ---- top bar: search pill + overflow menu
+		val topBar = javax.swing.JPanel(BorderLayout()).apply {
+			isOpaque = false
+			border = javax.swing.border.EmptyBorder(12, 16, 8, 12)
+		}
+		topBar.add(searchPill, BorderLayout.CENTER)
+		val overflow = IconButton({ size -> Icons.moreVert(size, T.OnBg) }, 44) { showOverflowMenu() }
+		val overflowWrap = javax.swing.JPanel(BorderLayout()).apply {
+			isOpaque = false
+			border = javax.swing.border.EmptyBorder(0, 8, 0, 0)
+		}
+		overflowWrap.add(overflow, BorderLayout.CENTER)
+		topBar.add(overflowWrap, BorderLayout.EAST)
+		add(topBar, BorderLayout.NORTH)
+
+		// ---- screens (each with its own chip row)
+		cardStack.add(buildFavouritesScreen(), screenNames[0])
+		cardStack.add(buildScreen(chips(addFolderChip, addCbzChip, removeLocalChip), localGrid), screenNames[1])
+		cardStack.add(buildScreen(chips(clearHistoryChip), historyGrid), screenNames[2])
+		add(centerPanel, BorderLayout.CENTER)
+
+		add(nav, BorderLayout.SOUTH)
 
 		refreshAll()
+		selectTab(0)
 	}
 
-	// ------------------------------------------------------------- menu
+	private fun selectTab(index: Int) {
+		queries[currentTab] = searchPill.query()
+		currentTab = index.coerceIn(0, grids.size - 1)
+		nav.selectedIndex = currentTab
+		(cardStack.layout as CardLayout).show(cardStack, screenNames[currentTab])
+		searchPill.setQuery(queries[currentTab])
+		grids[currentTab].setFilter(queries[currentTab])
+	}
 
-	private fun buildMenuBar(): javax.swing.JMenuBar {
-		val bar = javax.swing.JMenuBar()
+	// ------------------------------------------------------------ screens
 
-		val file = javax.swing.JMenu("Tệp")
-		file.add(javax.swing.JMenuItem("Nhập backup (.bak)…").apply {
-			addActionListener { importBackup() }
-		})
-		file.add(javax.swing.JMenuItem("Xuất backup (.bak)…").apply {
-			addActionListener { exportBackup() }
-		})
-		file.addSeparator()
-		file.add(javax.swing.JMenuItem("Thoát").apply {
-			addActionListener { dispose() }
-		})
-		bar.add(file)
+	private fun chips(vararg chips: PillChip): javax.swing.JPanel =
+		javax.swing.JPanel(java.awt.FlowLayout(java.awt.FlowLayout.LEFT, 8, 0)).apply {
+			isOpaque = false
+			border = javax.swing.border.EmptyBorder(4, 16, 8, 16)
+			chips.forEach { add(it) }
+		}
 
-		val library = javax.swing.JMenu("Thư viện")
-		library.add(javax.swing.JMenuItem("Thêm thư mục…").apply {
-			addActionListener { importLocalManga(folder = true) }
-		})
-		library.add(javax.swing.JMenuItem("Thêm CBZ/CBR… (cbz/zip)").apply {
-			addActionListener { importLocalManga(folder = false) }
-		})
-		bar.add(library)
+	private fun buildScreen(chipRow: javax.swing.JPanel, grid: CoverGridPanel): javax.swing.JPanel =
+		javax.swing.JPanel(BorderLayout()).apply {
+			isOpaque = false
+			add(chipRow, BorderLayout.NORTH)
+			add(grid, BorderLayout.CENTER)
+		}
 
-		val help = javax.swing.JMenu("Trợ giúp")
-		help.add(javax.swing.JMenuItem("Giới thiệu").apply {
-			addActionListener { showAbout() }
-		})
-		bar.add(help)
-		return bar
+	private fun buildFavouritesScreen(): javax.swing.JPanel =
+		buildScreen(chips(categoryChip, toggleFavouriteChip), favouritesGrid)
+
+	// ------------------------------------------------------------ menu
+
+	private fun showOverflowMenu() {
+		val menu = darkPopup().apply {
+			add(darkMenuItem("Nhập backup (.bak)…", Icons.imports(18, T.OnBg)) { importBackup() })
+			add(darkMenuItem("Xuất backup (.bak)…", Icons.exports(18, T.OnBg)) { exportBackup() })
+			addSeparator()
+			add(darkMenuItem("Giới thiệu", Icons.info(18, T.OnBg)) { showAbout() })
+			addSeparator()
+			add(darkMenuItem("Thoát") { dispose() })
+		}
+		menu.show(this, width - menu.preferredSize.width - 16, searchPillTopOffset())
+	}
+
+	private fun searchPillTopOffset(): Int = 64
+
+	private fun showCategoryMenu() {
+		val menu = darkPopup()
+		for (category in favouritesStore.listCategories()) {
+			val id = category.categoryId.toLong()
+			val item = darkMenuItem(category.title) {
+				currentCategoryId = id
+				currentCategoryTitle = category.title
+				categoryChip.refreshText()
+				refreshFavourites()
+			}
+			if (id == currentCategoryId) {
+				item.icon = javax.swing.ImageIcon(Icons.check(18, T.Accent))
+			}
+			menu.add(item)
+		}
+		if (menu.subElements.isEmpty()) {
+			menu.add(darkMenuItem("Thư viện") {
+				currentCategoryId = 1L
+				currentCategoryTitle = "Thư viện"
+				categoryChip.refreshText()
+				refreshFavourites()
+			})
+		}
+		menu.show(this, 16, searchPillTopOffset())
 	}
 
 	private fun showAbout() {
@@ -117,77 +240,16 @@ class MainFrame(
 				xác nhận trên thiết bị thật cho chiều Kotanix → Android).
 
 				Đọc được manga local: thư mục / CBZ / CBZ lồng nhau.
+				Giao diện mô phỏng Kotatsu Android (dark, cover grid, bottom navigation).
 				Mã nguồn: giữ nguyên attribution theo UPSTREAM.lock.""".trimIndent(),
 			"Giới thiệu Kotanix",
 			JOptionPane.INFORMATION_MESSAGE,
 		)
 	}
 
-	// ------------------------------------------------------------- tabs
+	// ------------------------------------------------------------ refresh
 
-	private fun buildFavouritesTab(): javax.swing.JPanel {
-		val panel = javax.swing.JPanel(BorderLayout())
-		val toolbar = javax.swing.JPanel(FlowLayout(FlowLayout.LEFT, 8, 6)).apply {
-			background = Color(0x14171C)
-		}
-		toolbar.add(javax.swing.JLabel("Danh mục:").apply { foreground = Color(0xC9CFD6) })
-		categoryBox.apply {
-			addActionListener { refreshFavourites() }
-			background = Color(0x23272E); foreground = Color(0xE8E3D8)
-			maximumSize = Dimension(320, 28)
-		}
-		toolbar.add(categoryBox)
-		toolbar.add(actionButton("Toggle yêu thích") { selectedFavourite()?.let {
-			favouritesStore.toggleFavourite(it.id, (categoryBox.selectedItem as? CategoryItem)?.id)
-			refreshFavourites()
-		} })
-		panel.add(toolbar, BorderLayout.NORTH)
-		panel.add(favouritesList, BorderLayout.CENTER)
-		return panel
-	}
-
-	private fun buildLocalTab(): javax.swing.JPanel {
-		val panel = javax.swing.JPanel(BorderLayout())
-		val toolbar = javax.swing.JPanel(FlowLayout(FlowLayout.LEFT, 8, 6)).apply {
-			background = Color(0x14171C)
-		}
-		toolbar.add(actionButton("Thêm thư mục…") { importLocalManga(folder = true) })
-		toolbar.add(actionButton("Thêm CBZ…") { importLocalManga(folder = false) })
-		toolbar.add(actionButton("Gỡ khỏi local") { removeSelectedLocal() })
-		panel.add(toolbar, BorderLayout.NORTH)
-		panel.add(localList, BorderLayout.CENTER)
-		return panel
-	}
-
-	private fun buildHistoryTab(): javax.swing.JPanel {
-		val panel = javax.swing.JPanel(BorderLayout())
-		val toolbar = javax.swing.JPanel(FlowLayout(FlowLayout.LEFT, 8, 6)).apply {
-			background = Color(0x14171C)
-		}
-		toolbar.add(javax.swing.JLabel("Gần đây").apply { foreground = Color(0xC9CFD6) })
-		toolbar.add(actionButton("Xoá hết lịch sử…") { clearHistory() })
-		panel.add(toolbar, BorderLayout.NORTH)
-		panel.add(historyList, BorderLayout.CENTER)
-		return panel
-	}
-
-	private fun actionButton(text: String, onClick: () -> Unit) =
-		javax.swing.JButton(text).apply {
-			foreground = Color(0xE8E3D8)
-			background = Color(0x2A2F38)
-			isFocusPainted = false
-			addActionListener { onClick() }
-		}
-
-	private inner class CategoryItem(val id: Long, label: String) {
-		private val label = label
-		override fun toString(): String = label
-	}
-
-	private fun selectedFavourite(): Manga? = favouritesList.selected()
-	private fun selectedLocal(): Manga? = localList.selected()
-
-	// ------------------------------------------------------------- refresh
+	private fun historyPercent(m: Manga): Float? = historyStore.get(m.id)?.percent
 
 	private fun refreshAll() {
 		refreshCategories()
@@ -197,36 +259,32 @@ class MainFrame(
 	}
 
 	private fun refreshCategories() {
-		val previous = (categoryBox.selectedItem as? CategoryItem)?.id
-		categoryBox.removeAllItems()
-		for (c in favouritesStore.listCategories()) {
-			categoryBox.addItem(CategoryItem(c.categoryId.toLong(), c.title))
-		}
-		if (categoryBox.itemCount == 0) categoryBox.addItem(CategoryItem(1, "Thư viện"))
-		if (previous != null) {
-			for (i in 0 until categoryBox.itemCount) {
-				if (categoryBox.getItemAt(i).id == previous) categoryBox.selectedIndex = i
-			}
-		}
+		val first = favouritesStore.listCategories().firstOrNull()
+		currentCategoryId = first?.categoryId?.toLong() ?: 1L
+		currentCategoryTitle = first?.title ?: "Thư viện"
+		categoryChip.refreshText()
 	}
 
 	private fun refreshFavourites() {
-		val cat = (categoryBox.selectedItem as? CategoryItem)?.id ?: 1L
-		favouritesList.setItems(favouritesStore.getFavouriteManga(cat))
+		val items = favouritesStore.getFavouriteManga(currentCategoryId).map { GridItem(it, historyPercent(it)) }
+		favouritesGrid.setItems(items)
 	}
 
 	private fun refreshLocal() {
 		val pairs = mangaStore.findLocalManga()
 		val items = pairs.mapNotNull { (id, _) -> mangaStore.findById(id) }
-		localList.setItems(items)
+		localGrid.setItems(items.map { GridItem(it, historyPercent(it)) })
 	}
 
 	private fun refreshHistory() {
-		val items = historyStore.getRecent(60).map { it.manga }
-		historyList.setItems(items)
+		val entries = historyStore.getRecent(120)
+		historyGrid.setItems(entries.map { GridItem(it.manga, it.history.percent) })
+		fabRow.isVisible = entries.isNotEmpty()
+		centerPanel.revalidate()
+		centerPanel.repaint()
 	}
 
-	// ------------------------------------------------------------- actions
+	// ------------------------------------------------------------ actions
 
 	private fun openManga(manga: Manga) {
 		val path = mangaStore.getLocalPath(manga.id)
@@ -244,8 +302,13 @@ class MainFrame(
 		}
 	}
 
+	private fun openMostRecent() {
+		val latest = historyStore.getRecent(1).firstOrNull()?.manga ?: return
+		openManga(latest)
+	}
+
 	private fun removeSelectedLocal() {
-		val manga = selectedLocal() ?: return
+		val manga = localGrid.selected() ?: return
 		db.exec("DELETE FROM local_index WHERE manga_id = ?", manga.id)
 		refreshLocal()
 	}
