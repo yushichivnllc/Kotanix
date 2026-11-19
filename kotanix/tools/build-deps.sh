@@ -41,16 +41,16 @@ log() { printf '[build-deps] %s\n' "$*"; }
 : "${JAVA_HOME:=${KOTANIX_JAVA_HOME:-}}"
 : "${KOTLINC_HOME:=${KOTANIX_KOTLINC_HOME:-}}"
 if [ -z "$JAVA_HOME" ]; then
-  if [ -d "/home/user/tools/jdk" ]; then JAVA_HOME=/home/user/tools/jdk; else
-    echo "JAVA_HOME is not set and /home/user/tools/jdk does not exist; run tools/setup-toolchain.sh first" >&2
-    exit 1
-  fi
+  for cand in "$HERE/../.toolchain/jdk" /home/user/tools/jdk; do
+    if [ -d "$cand" ]; then JAVA_HOME="$cand"; break; fi
+  done
+  [ -n "$JAVA_HOME" ] || { echo "JAVA_HOME is not set and neither $HERE/../.toolchain/jdk nor /home/user/tools/jdk exists; run tools/setup-toolchain.sh first" >&2; exit 1; }
 fi
 if [ -z "$KOTLINC_HOME" ]; then
-  if [ -d "/home/user/tools/kotlinc" ]; then KOTLINC_HOME=/home/user/tools/kotlinc; else
-    echo "KOTLINC_HOME is not set and /home/user/tools/kotlinc does not exist; run tools/setup-toolchain.sh first" >&2
-    exit 1
-  fi
+  for cand in "$HERE/../.toolchain/kotlinc" /home/user/tools/kotlinc; do
+    if [ -d "$cand" ]; then KOTLINC_HOME="$cand"; break; fi
+  done
+  [ -n "$KOTLINC_HOME" ] || { echo "KOTLINC_HOME is not set and neither $HERE/../.toolchain/kotlinc nor /home/user/tools/kotlinc exists; run tools/setup-toolchain.sh first" >&2; exit 1; }
 fi
 export JAVA_HOME
 export PATH="$KOTLINC_HOME/bin:$JAVA_HOME/bin:$PATH"

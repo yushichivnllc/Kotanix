@@ -108,6 +108,16 @@ Kết quả kỳ vọng: `SELFTEST OK — 7 checks`.
 **CHƯA XÁC MINH**: `sudo dpkg -i` trên máy thật (sandbox không có root); hiển thị UI trên
 màn hình thật; auto-update (ngoài phạm vi M3).
 
+## 6a. CI — GitHub Actions tự build .deb + .AppImage
+
+Workflow `.github/workflows/kotanix-packages.yml` (repo root) chạy trên `ubuntu-latest`:
+push lên `devel` / `arena/**`, tag `v*`, pull_request vào `devel`, hoặc `workflow_dispatch`
+(chọn version). Hai job song song (`deb`, `appimage`), mỗi job: setup toolchain
+(SHA-256 verified) → build dep jars → đóng gói → **kiểm lại bằng đúng selftest headless
+ở trên máy thật** → upload artifact `kotanix-deb` / `kotanix-appimage` (retention 30 ngày).
+CI không đăng release; artifact chỉ để tải/kiểm tra. Cache `.ci-refs/` (tarball ghim) và
+`kotanix/.toolchain/` giúp các run sau nhanh hơn.
+
 ## 7. AppImage
 
 ```sh
