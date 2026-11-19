@@ -102,6 +102,7 @@ class BookmarksContent(
 			viewport.isOpaque = false
 			verticalScrollBar.unitIncrement = 48
 			verticalScrollBar.background = T.Bg
+		horizontalScrollBarPolicy = javax.swing.ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER
 		}
 	}
 }

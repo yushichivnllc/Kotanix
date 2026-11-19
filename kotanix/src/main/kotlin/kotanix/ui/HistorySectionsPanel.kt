@@ -36,6 +36,7 @@ class HistorySectionsPanel(
 		background = T.Bg
 		verticalScrollBar.unitIncrement = 48
 		verticalScrollBar.background = T.Bg
+		horizontalScrollBarPolicy = javax.swing.ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER
 	}
 
 	private val empty = JLabel(emptyHint, SwingConstants.CENTER).apply {
