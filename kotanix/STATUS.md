@@ -55,6 +55,7 @@ quá bằng chứng trong repo hoặc output test thật. Quy ước trạng th�
 
 ## 4. Giao diện người dùng (M2)
 
+- **XONG (code + headless render kiểm)** UI dùng **Swing** theo phong cách Kotatsu Android (dark Material 3): black background, pill search bar, cover grid (rounded corners, badge tiến độ %, ellipsis 2 dòng), bottom navigation bar, FAB “Đọc tiếp”, overflow ⋮ menu (nhập/xuất backup), icons vẽ programmatically (không copy asset). Trước đây là giao diện mặc định của Swing (menu bar + JList) — đã redesign hoàn toàn. Kiểm chứng: compile + headless component-level render (paint components ra PNG) + `--selftest` 7/7. **GUI trên desktop thật CHƯA XÁC MINH từ máy dev**
 - **XONG (code + headless kiểm chứng)** UI đầu tiên dùng **Swing** (JDK có `java.desktop`;
   không JavaFX, không Android toolkit). Các màn hình, theo layout Android (Favourites /
   Local / History):
