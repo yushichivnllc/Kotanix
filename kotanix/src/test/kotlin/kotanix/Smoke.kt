@@ -9,6 +9,7 @@ import java.util.zip.ZipOutputStream
 
 fun main() {
 	Sqlite.load()
+	sourcesStoreRoundTrip()
 	val tmp = createTempDir()
 	val db = SqliteDatabase.openInMemory()
 	Schema.createAll(db)
@@ -76,3 +77,22 @@ private val TINY_PNG = byteArrayOf(
 	0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
 	0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
 )
+
+fun sourcesStoreRoundTrip() {
+	Sqlite.load()
+	val db = SqliteDatabase.openInMemory()
+	Schema.createAll(db)
+	val store = SourcesStore(db)
+	check(store.pinnedNames().isEmpty()) { "sources table should start empty" }
+	store.setPinned("MANGADEX", true)
+	store.setPinned("CMANGA", true)
+	check(store.pinnedNames().toSet() == setOf("MANGADEX", "CMANGA")) { "pin failed: ${store.pinnedNames()}" }
+	check(store.isPinned("MANGADEX")) { "isPinned true expected" }
+	store.setPinned("MANGADEX", false)
+	check(!store.isPinned("MANGADEX")) { "unpin failed" }
+	check(store.pinnedNames() == listOf("CMANGA")) { "unpin/keep failed: ${store.pinnedNames()}" }
+	// re-pin is idempotent
+	store.setPinned("CMANGA", true)
+	check(store.pinnedNames() == listOf("CMANGA")) { "re-pin not idempotent: ${store.pinnedNames()}" }
+	println("sources pin round-trip OK (pin/unpin/re-pin)")
+}

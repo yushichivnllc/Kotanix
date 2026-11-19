@@ -4,7 +4,9 @@ import kotanix.core.LOCAL_SOURCE
 import kotanix.core.Manga
 import kotanix.data.HistoryStore
 import kotanix.data.MangaStore
+import kotanix.data.SourcesStore
 import kotanix.data.SqliteDatabase
+import kotanix.online.SourceCatalog
 import java.awt.BorderLayout
 import java.awt.Color
 import java.awt.Cursor
@@ -28,8 +30,9 @@ import javax.swing.border.EmptyBorder
  *    a dead button);
  *  - "Gợi ý cho bạn" — suggestions drawn from the *local* library (random titles, preferring
  *    ones without history). Not the upstream remote-suggestions feed; rewording keeps it honest;
- *  - "Nguồn truyện" — the sources actually present in the library (LOCAL + anything restored
- *    from backup), pinned-style tiles like the Android source grid. Empty state is explicit.
+ *  - "Nguồn truyện" — pinned online sources from the bundled read-only catalog (see
+ *    SourceCatalog / UPSTREAM.lock §2), plus sources present in the library. The header link
+ *    opens the full catalog browser. Empty state is explicit.
  *
  * Typing in the global search pill switches this tab to a results grid (searchByTitle).
  */
@@ -40,9 +43,12 @@ class ExplorePanel(
 	private val onOpenLocalTab: () -> Unit,
 	private val onShowBookmarks: () -> Unit,
 	private val onInfo: (String) -> Unit,
+	private val onShowCatalog: () -> Unit,
 ) : JPanel(java.awt.CardLayout()) {
 
 	private val historyStore = HistoryStore(db)
+	private val sourcesStore = SourcesStore(db)
+	private val catalogByName = SourceCatalog.SOURCES.associateBy { it.name }
 
 	private val browse = buildBrowse()
 	private val resultsHeader = JLabel("Kết quả tìm kiếm").apply {
@@ -104,7 +110,7 @@ class ExplorePanel(
 		}
 		column.addRow(suggestionHost)
 		column.addRow(javax.swing.Box.createVerticalStrut(12), fill = java.awt.GridBagConstraints.NONE)
-		column.addRow(sectionHeader("Nguồn truyện", null, null))
+		column.addRow(sectionHeader("Nguồn truyện", "Tất cả ${SourceCatalog.SIZE} nguồn") { onShowCatalog() })
 		sourcesHost = JPanel(GridLayout(0, 4, 10, 14)).apply {
 			isOpaque = false
 			maximumSize = Dimension(Int.MAX_VALUE, Int.MAX_VALUE)
@@ -194,20 +200,57 @@ class ExplorePanel(
 	private fun refillSources() {
 		sourcesHost.removeAll()
 		val rollup = mangaStore.countBySource()
-		if (rollup.isEmpty()) {
+		val rollupBySource = rollup.toMap()
+		val pinned = sourcesStore.pinnedNames().filter { it in catalogByName }
+
+		if (rollup.isEmpty() && pinned.isEmpty()) {
 			sourcesHost.layout = FlowLayout(FlowLayout.LEFT, 0, 0)
-			sourcesHost.add(JLabel("Chưa có nguồn nào — thêm manga local hoặc nhập backup.").apply {
+			sourcesHost.add(JLabel("Chưa có nguồn nào — bấm “Tất cả ${SourceCatalog.SIZE} nguồn” để ghim nguồn yêu thích.").apply {
 				font = T.font(12.5f)
 				foreground = T.Dim
 			})
-		} else {
-			sourcesHost.layout = GridLayout(0, 4, 10, 14)
-			for ((source, count) in rollup.take(8)) {
-				sourcesHost.add(SourceTile(source, count) {
+			sourcesHost.revalidate()
+			sourcesHost.repaint()
+			return
+		}
+
+		sourcesHost.layout = GridLayout(0, 4, 10, 14)
+		// Pinned catalog sources first (they fit on one row in practice), then what the
+		// library actually uses.
+		for (name in pinned) {
+			if (name in rollupBySource) continue
+			val entry = catalogByName.getValue(name)
+			val broken = entry.isBroken || entry.isDeprecated
+			sourcesHost.add(SourceTile(
+				source = name,
+				title = entry.title,
+				subtitle = when {
+					entry.isBroken -> "bị hỏng"
+					entry.isDeprecated -> "cũ"
+					entry.locale.isEmpty() -> "đa ngôn ngữ"
+					else -> entry.locale
+				},
+				onClick = {
+					onInfo("“${entry.title}” ($name) chưa được port — online chưa hỗ trợ, Milestone M2.\n" +
+						"Ghim chỉ để đánh dấu nguồn yêu thích.")
+				},
+				onTogglePin = { sourcesStore.setPinned(name, false); refillSources() },
+				pinned = true,
+				broken = broken,
+			))
+		}
+		for ((source, count) in rollup) {
+			val catalogEntry = catalogByName[source]
+			val title = catalogEntry?.title ?: source
+			sourcesHost.add(SourceTile(
+				source = source,
+				title = if (source == LOCAL_SOURCE) "Local" else title,
+				subtitle = "$count bộ",
+				onClick = {
 					if (source == LOCAL_SOURCE) onOpenLocalTab() else
-						onInfo("Nguồn “$source” (online) chưa được port — Milestone M2.")
-				})
-			}
+						onInfo("Nguồn “$title” ($source) chưa được port — online chưa hỗ trợ, Milestone M2.")
+				},
+			))
 		}
 		sourcesHost.revalidate()
 		sourcesHost.repaint()
@@ -307,83 +350,3 @@ private class SuggestionRow(
 		text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 }
 
-/** Source tile: colored rounded square + pin badge, name and count below (Android source grid). */
-private class SourceTile(
-	source: String,
-	count: Int,
-	private val onClick: () -> Unit,
-) : JPanel() {
-
-	private val pretty = prettySource(source)
-	private val tileColor = if (source == LOCAL_SOURCE) T.Accent else sourceColor(source)
-
-	init {
-		isOpaque = false
-		layout = javax.swing.BoxLayout(this, javax.swing.BoxLayout.Y_AXIS)
-		cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
-		border = EmptyBorder(2, 4, 2, 4)
-
-		val icon = SourceIcon(pretty, tileColor, source == LOCAL_SOURCE)
-		icon.alignmentX = CENTER_ALIGNMENT
-		add(icon)
-		add(javax.swing.Box.createVerticalStrut(6))
-		add(JLabel(pretty.take(12).let { if (it.length < pretty.length) "$it…" else it }).apply {
-			font = T.font(12f)
-			foreground = T.OnBg
-			alignmentX = CENTER_ALIGNMENT
-		})
-		add(JLabel("$count bộ").apply {
-			font = T.font(10f)
-			foreground = T.Dim
-			alignmentX = CENTER_ALIGNMENT
-		})
-
-		addMouseListener(object : MouseAdapter() {
-			override fun mouseClicked(e: MouseEvent) { onClick() }
-		})
-	}
-
-	private fun prettySource(source: String): String = when (source) {
-		LOCAL_SOURCE -> "Local"
-		else -> source
-	}
-
-	private fun sourceColor(source: String): Color {
-		val palette = intArrayOf(0x3B6FE0, 0xE0632F, 0x2FA36B, 0x8A4FE0, 0xD0453E, 0x2E8FA8, 0xB85C0A, 0x4E5BD0)
-		return Color(palette[Math.floorMod(source.hashCode(), palette.size)])
-	}
-}
-
-/** The 72px rounded-square source glyph with a small pin in the corner. */
-private class SourceIcon(
-	pretty: String,
-	private val color: Color,
-	private val isLocal: Boolean,
-) : javax.swing.JComponent() {
-
-	private val letter = pretty.trim().firstOrNull()?.uppercaseChar()?.toString() ?: "?"
-
-	init {
-		preferredSize = Dimension(64, 64)
-		minimumSize = Dimension(64, 64)
-		maximumSize = Dimension(64, 64)
-	}
-
-	override fun paintComponent(g: java.awt.Graphics) {
-		val g2 = T.g2(g)
-		g2.color = color
-		g2.fill(RoundRectangle2D.Float(0f, 0f, 64f, 64f, 18f, 18f))
-		if (isLocal) {
-			val folder = Icons.folder(32, Color(0x10231C))
-			g2.drawImage(folder, (64 - folder.width) / 2, (64 - folder.height) / 2, null)
-		} else {
-			g2.color = Color(0xFFFFFF)
-			g2.font = T.font(30f, bold = true)
-			val fm = g2.fontMetrics
-			g2.drawString(letter, (64 - fm.stringWidth(letter)) / 2, (64 + fm.ascent - fm.descent) / 2)
-		}
-		val pin = Icons.pin(18, T.OnBg)
-		g2.drawImage(pin, 2, 46, null)
-		g2.dispose()
-	}
-}

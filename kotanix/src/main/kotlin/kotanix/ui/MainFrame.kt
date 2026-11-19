@@ -79,6 +79,7 @@ class MainFrame(
 		onOpenLocalTab = { selectTab(TAB_LOCAL) },
 		onShowBookmarks = { showBookmarks() },
 		onInfo = { message -> infoDialog(message) },
+		onShowCatalog = { showSourcesCatalog() },
 	)
 
 	private val screenNames = listOf("history", "favourites", "explore", "local")
@@ -375,6 +376,14 @@ class MainFrame(
 
 	private fun showBookmarks() {
 		BookmarksDialog(this, db) { manga -> openDetails(manga) }.isVisible = true
+	}
+
+	private fun showSourcesCatalog() {
+		SourcesCatalogDialog(
+			this, db,
+			onInfo = { message -> infoDialog(message) },
+			onPinsChanged = { explorePanel.refreshData() },
+		).isVisible = true
 	}
 
 	// ------------------------------------------------------------ actions

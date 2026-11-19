@@ -35,6 +35,14 @@ mọi kho Maven (repo.maven.apache.org, maven.google.com, jitpack.io — xem STA
 parser online **bị chặn ở mức dependency**, không phải ở mức thiết kế. Chi tiết: `STATUS.md` §5,
 `docs/PORTING_MATRIX.md` §Nguồn online.
 
+**Dữ liệu danh mục nguồn (commit 2026-11):** `kotanix/src/main/kotlin/kotanix/online/SourceCatalog.kt`
+là file SINH TỰ ĐỘNG (generator `kotanix/tools/gen-source-catalog.py`, chạy trên checkout chỉ đọc
+của đúng commit ghim ở trên) chứa **dữ liệu factual** của 1386 nguồn online (name/title/locale/
+contentType/isBroken/isDeprecated) để hiển thị trình duyệt "Nguồn truyện" trong tab Khám phá —
+Kotanix hiện CHỈ HIỂN THỊ danh mục (read-only) và ghim/unpin vào bảng `sources` (đã có trong schema
+backup); online vẫn CHƯA port (không có parser runtime). File này là một phần của Kotanix, được
+tái sinh từ nguồn ghim chứ không chép tay; tái sinh cùng revision phải cho cùng nội dung.
+
 ## 3. Công cụ build Kotanix (ghim phiên bản, tải từ registry cho phép)
 
 | Công cụ | Phiên bản | Nguồn | Ghi chú |

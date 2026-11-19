@@ -278,6 +278,26 @@ object Icons {
 	}
 
 	/** Push-pin — marks a pinned source, like Kotatsu's source grid. */
+	/** Filled pin — the ‘pinned’ state of a source tile. */
+	fun pinFilled(size: Int, color: Color): BufferedImage = canvas(size) { g ->
+		val s = size / 24f
+		g.color = color
+		val p = Path2D.Float().apply {
+			moveTo(9f * s, 4f * s)
+			lineTo(15f * s, 4f * s)
+			lineTo(14.2f * s, 10f * s)
+			lineTo(17.5f * s, 13f * s)
+			lineTo(17.5f * s, 15.2f * s)
+			lineTo(6.5f * s, 15.2f * s)
+			lineTo(6.5f * s, 13f * s)
+			lineTo(9.8f * s, 10f * s)
+			closePath()
+		}
+		g.fill(p)
+		g.stroke(color, 1.9f * s)
+		g.drawLine((12 * s).toInt(), (15.2f * s).toInt(), (12 * s).toInt(), (20.5f * s).toInt())
+	}
+
 	fun pin(size: Int, color: Color): BufferedImage = canvas(size) { g ->
 		val s = size / 24f
 		g.stroke(color, 1.9f * s)
