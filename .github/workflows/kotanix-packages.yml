@@ -1,0 +1,169 @@
+# Kotanix — tự động build gói .deb và .AppImage.
+#
+# Mọi thứ đều dựng từ nguồn ghim trong repo (kotanix/UPSTREAM.lock,
+# kotanix/tools/toolchain.lock), không tải nhị phân dựng sẵn — giống hệt
+# cách build dưới máy dev, chỉ khác là trên GitHub-hosted ubuntu-latest
+# (không phụ thuộc mạng của sandbox build).
+#
+# Trigger:
+#   - push lên `devel` và các branch `arena/**`
+#   - pull_request vào `devel`
+#   - tag `v*`
+#   - workflow_dispatch (cho phép override version)
+#
+# Kết quả: artifact `kotanix-deb` và `kotanix-appimage` được đính kèm vào run.
+# CI KHÔNG tự đăng release/publish đi đâu — artifact chỉ để tải/kiểm tra.
+name: Kotanix packages
+
+on:
+  push:
+    branches: [devel, 'arena/**']
+    tags: ['v*']
+  pull_request:
+    branches: [devel]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'KOTANIX_VERSION (mặc định 0.1.0)'
+        required: false
+        default: '0.1.0'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  KOTANIX_VERSION: ${{ inputs.version || '0.1.0' }}
+  REFS_DIR: ${{ github.workspace }}/.ci-refs
+
+jobs:
+  deb:
+    name: Build .deb
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends python3-venv
+
+      - name: Cache Kotanix toolchain (Temurin 21 + Kotlin 2.2.10)
+        uses: actions/cache@v4
+        with:
+          path: kotanix/.toolchain
+          key: kotanix-toolchain-${{ hashFiles('kotanix/tools/toolchain.lock') }}
+
+      - name: Cache pinned source tarballs (build-deps)
+        uses: actions/cache@v4
+        with:
+          path: .ci-refs
+          key: kotanix-refs-${{ hashFiles('kotanix/UPSTREAM.lock', 'kotanix/tools/build-deps.sh', 'kotanix/tools/flatten-mpp.py', 'kotanix/tools/patch-acollection-simplearraymap.py') }}
+
+      - name: Setup toolchain
+        working-directory: kotanix
+        run: bash tools/setup-toolchain.sh
+
+      - name: Build dependency jars (okio / androidx.collection / okhttp)
+        working-directory: kotanix
+        run: bash tools/build-deps.sh
+
+      - name: Package .deb
+        working-directory: kotanix
+        run: KOTANIX_TOOLS="$GITHUB_WORKSPACE/kotanix/.toolchain" bash tools/package-deb.sh
+
+      - name: Verify .deb — staged extract + headless self-test
+        run: |
+          set -euo pipefail
+          STAGE="$(mktemp -d)"
+          DEB="$(ls "$GITHUB_WORKSPACE"/kotanix/build/dist/*_amd64.deb)"
+          dpkg-deb -x "$DEB" "$STAGE"
+          LANG=C.UTF-8 "$STAGE/usr/lib/kotanix/jre/bin/java" \
+            -Djava.library.path="$STAGE/usr/lib/kotanix/lib" \
+            -cp "$STAGE/usr/lib/kotanix/lib/*" \
+            kotanix.ui.KotanixKt --selftest="$GITHUB_WORKSPACE/app/src/androidTest/assets/kotatsu_test.bak" \
+            | tee selftest-deb.log
+          grep -q 'SELFTEST OK' selftest-deb.log
+          sha256sum "$DEB"
+
+      - name: Upload .deb artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kotanix-deb
+          path: kotanix/build/dist/*_amd64.deb
+          retention-days: 30
+          if-no-files-found: error
+
+  appimage:
+    name: Build .AppImage
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends python3-venv
+
+      - name: Cache Kotanix toolchain (Temurin 21 + Kotlin 2.2.10)
+        uses: actions/cache@v4
+        with:
+          path: kotanix/.toolchain
+          key: kotanix-toolchain-${{ hashFiles('kotanix/tools/toolchain.lock') }}
+
+      - name: Cache pinned source tarballs (build-deps)
+        uses: actions/cache@v4
+        with:
+          path: .ci-refs
+          key: kotanix-refs-${{ hashFiles('kotanix/UPSTREAM.lock', 'kotanix/tools/build-deps.sh', 'kotanix/tools/flatten-mpp.py', 'kotanix/tools/patch-acollection-simplearraymap.py') }}
+
+      - name: Cache pinned C sources (package-appimage)
+        uses: actions/cache@v4
+        with:
+          path: kotanix/build/appimage/srcs
+          key: kotanix-appimage-srcs-${{ hashFiles('kotanix/tools/package-appimage.sh') }}
+
+      - name: Setup toolchain
+        working-directory: kotanix
+        run: bash tools/setup-toolchain.sh
+
+      - name: Build dependency jars (okio / androidx.collection / okhttp)
+        working-directory: kotanix
+        run: bash tools/build-deps.sh
+
+      - name: Package .AppImage
+        working-directory: kotanix
+        run: bash tools/package-appimage.sh
+
+      - name: Verify .AppImage — extract + headless self-test (no FUSE needed)
+        run: |
+          set -euo pipefail
+          APPIMAGE="$(ls "$GITHUB_WORKSPACE"/kotanix/build/dist/*.AppImage)"
+          chmod +x "$APPIMAGE"
+          EXTRACT_DIR="$(mktemp -d)"
+          ( cd "$EXTRACT_DIR" && "$APPIMAGE" --appimage-extract >/dev/null )
+          for path in squashfs-root/AppRun squashfs-root/kotanix.desktop squashfs-root/kotanix.png \
+                      squashfs-root/usr/lib/kotanix/jre squashfs-root/usr/lib/kotanix/lib/kotanix-app.jar \
+                      squashfs-root/usr/lib/kotanix/lib/libkotanixsqlite.so; do
+            [ -e "$EXTRACT_DIR/$path" ] || { echo "missing payload entry: $path" >&2; exit 1; }
+          done
+          LANG=C.UTF-8 APPIMAGE_EXTRACT_AND_RUN=1 "$APPIMAGE" \
+            --selftest="$GITHUB_WORKSPACE/app/src/androidTest/assets/kotatsu_test.bak" \
+            | tee selftest-appimage.log
+          grep -q 'SELFTEST OK' selftest-appimage.log
+          sha256sum "$APPIMAGE"
+
+      - name: Upload .AppImage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kotanix-appimage
+          path: kotanix/build/dist/*.AppImage
+          retention-days: 30
+          if-no-files-found: error
