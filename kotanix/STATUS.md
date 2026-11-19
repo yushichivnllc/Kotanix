@@ -86,6 +86,21 @@ quá bằng chứng trong repo hoặc output test thật. Quy ước trạng th�
   - Hướng đi sẽ quyết định ở M2 (ví dụ: port phần cần thiết sang Kotlin, hoặc yêu cầu
     javac trong môi trường build; **không** re-upload jar không xác minh).
 
+## 6a. Đóng gói `.AppImage` (M3)
+
+- **XONG (xây + kiểm chạy)** `tools/package-appimage.sh` build
+  `Kotanix-0.1.0-x86_64.AppImage` (~40 MB) **từ source ghim** (github release binaries
+  bị chặn ở sandbox — xem UPSTREAM.lock §9): type2-runtime (MIT) + libfuse 3.15.0 (static,
+  LGPL-2.1, vá `mount.c.diff` của upstream) + squashfuse 0.5.2 (manual build) + zlib +
+  zstd + Temurin JRE bundle + cùng jars/stdlib/native lib như `.deb`. `mksquashfs`
+  (squashfs-tools 4.6.1) build riêng làm **build tool** (không đóng gói).
+- **ĐÃ KIỂM CHỨNG trên máy này**: `--appimage-extract` liệt kê đúng payload; chạy qua
+  **FUSE thật** (`/dev/fuse` + `fusermount3` setuid): `--selftest=…kotatsu_test.bak` →
+  **SELFTEST OK — 7 checks**; chế độ không FUSE (`APPIMAGE_EXTRACT_AND_RUN=1`) → cũng
+  **SELFTEST OK**.
+- **CHƯA XÁC MINH**: hiển thị GUI trên desktop thật; FUSE trên distro khác; gói **chưa ký**
+  (không có chữ ký/updateinfo — không dùng cho auto-update); cài đặt bởi AppImageLauncher.
+
 ## 6. Đóng gói `.deb` (M3)
 
 - **XONG (xây + kiểm staged install)** `tools/package-deb.sh` build

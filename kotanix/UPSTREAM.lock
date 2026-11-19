@@ -146,3 +146,40 @@ Các gói app-pin **chưa** được build; chỉ áp dụng khi port phần app
   nén từ `jdk4py` (JDK4PY_SHA256 trong `tools/toolchain.lock`). Bắt buộc phải là đúng
   bản đã verify; script không tự tải gì.
 - `dpkg-deb` từ hệ thống (Debian 12: 1.21.23) — công cụ build, không đóng gói.
+
+## 9. AppImage build (tools/package-appimage.sh + packaging/kotanix-apprun)
+
+GitHub release-asset binaries (appimagetool, type2-runtime releases, etc.) are unreachable
+from the build sandbox (redirect hosts are blocked), so every C component of the AppImage is
+built from **pinned git sources** — this is stronger than "trust a downloaded binary".
+All clones use `git fetch --depth 1 origin <commit>` and the script re-verifies HEAD.
+
+| Thành phần | Repo | Commit ghim (tag) | License |
+|---|---|---|---|
+| AppImage type2-runtime (binary inside the AppImage) | `github.com/AppImage/type2-runtime` | `fedfad51acc2860b2916a1eef32ba4a500ff31ef` (main @ 2026-10-19) | MIT |
+| libfuse (static `libfuse3.a`, linked vào runtime) | `github.com/libfuse/libfuse` | `6d08472ea47db895748d5ca7d3daf032c3fefcf8` (`fuse-3.15.0`) | LGPL-2.1 (library) |
+| squashfuse (static, trong runtime) | `github.com/vasi/squashfuse` | `775b4cc72ab47641637897f11ce0da15d5c1f115` (`0.5.2`) | BSD-2-Clause |
+| zlib (static `libz.a`) | `github.com/madler/zlib` | `51b7f2abdade71cd9bb0e7a373ef2610ec6f9daf` (`v1.3.1`) | zlib License |
+| zstd (static `libzstd.a`) | `github.com/meta/zstd` (cũ facebook/zstd) | `f8745da6ff1ad1e7bab384bd1f9d742439278e99` (`v1.5.7`) | BSD-3-Clause |
+| squashfs-tools `mksquashfs` (BUILD TOOL, không đóng gói) | `github.com/plougher/squashfs-tools` | `d8cb82d9840330f9344ec37b992595b5d7b44184` (`4.6.1`) | GPL-2.0 |
+| meson/ninja/pkgconf (build tool, PyPI, vào venv) | pypi.org | latest at build time (build-only, không đóng gói) | MIT / Apache-2.0 |
+| kotlin-stdlib đóng gói trong AppImage | từ toolchain ghim §3 | `9c67cc79…` (2.2.10) | Apache-2.0 |
+| Temurin JRE đóng gói trong AppImage | như §3 (jdk4py) | Temurin 21.0.8+9 | GPL-2.0 + classpath exception |
+
+Ghi chú kỹ thuật / sai lệch so với upstream:
+- Official runtime build (Docker/Alpine) không dùng được trong sandbox; thay vào đó compile
+  `runtime.c` bằng **gcc 12** (`-static -Os`) thay vì clang, và **libfuse được vá bằng đúng
+  patch upstream** `patches/libfuse/mount.c.diff` trong `type2-runtime` (mount helper đọc
+  `$FUSERMOUNT_PROG`). squashfuse build thủ công (không qua autotools) với `config.h` viết
+  tay — các define: FUSE_USE_VERSION=32, HAVE_LINUX_TYPES_LE16, HAVE_ZLIB_H, HAVE_ZSTD_H,
+  SQFS_MULTITHREADED, HAVE_DECL_FUSE_CMDLINE_HELP, HAVE_DECL_FUSE_ADD_DIRENTRY,
+  HAVE_DECL_FUSE_DAEMONIZE, HAVE_FUSE_LL_FORGET_OP_64T, HAVE_SYS_SYSMACROS_H,
+  PACKAGE_*/VERSION (chỉ cho chuỗi in). Decompression: gzip + zstd only.
+- `mimalloc` (libfuse của upstream có nhắc) **không** dùng — không có mã nào tham chiếu.
+- Runtime tĩnh **không** phải static-pie (Debian gcc/glibc không cho static-pie chạy ổn
+  định); là static executable thường. Chức năng không khác.
+- AppImage lấy squashfs image ngay sau EOF của ELF (`appimage_get_elf_size`), nén gzip,
+  `-all-root`, `-processors 1`. **Không ký** (không có .sha256_sig/updateinfo; không tuyên
+  bố sẵn sàng cho auto-update). Copyright: `UPSTREAM.lock` + notices trong gói.
+- fusermount3 là setuid trên máy người dùng (Debian/Ubuntu: `fuse3` package). Máy không có
+  FUSE: chạy với `APPIMAGE_EXTRACT_AND_RUN=1`.

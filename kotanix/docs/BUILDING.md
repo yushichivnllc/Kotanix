@@ -108,7 +108,34 @@ Kết quả kỳ vọng: `SELFTEST OK — 7 checks`.
 **CHƯA XÁC MINH**: `sudo dpkg -i` trên máy thật (sandbox không có root); hiển thị UI trên
 màn hình thật; auto-update (ngoài phạm vi M3).
 
-## 7. App swing — chạy thử
+## 7. AppImage
+
+```sh
+bash tools/package-appimage.sh
+```
+
+Yêu cầu: bước 1 (toolchain) + 2 (jars). Mọi thành phần C (type2-runtime, libfuse,
+squashfuse, zlib, zstd) được build từ **source ghim** (`UPSTREAM.lock` §9) — không tải
+nhị phân nào từ GitHub releases (blocked). `mksquashfs` (squashfs-tools) build làm
+build tool. Kết quả: `kotanix/build/dist/Kotanix-0.1.0-x86_64.AppImage` (~40 MB,
+gói self-contained: Temurin JRE + jars + native lib).
+
+Kiểm nhanh (máy có FUSE — Debian/Ubuntu mặc định có `fuse3`):
+
+```sh
+LANG=C.UTF-8 ./build/dist/Kotanix-0.1.0-x86_64.AppImage --selftest=../app/src/androidTest/assets/kotatsu_test.bak
+```
+
+Kết quả kỳ vọng: `SELFTEST OK — 7 checks` (đúng như trên máy build). Không có FUSE:
+
+```sh
+APPIMAGE_EXTRACT_AND_RUN=1 ./build/dist/Kotanix-0.1.0-x86_64.AppImage --selftest=…
+```
+
+**CHƯA XÁC MINH**: GUI trên desktop thật; chữ ký/updateinfo (gói chưa ký); máy không
+phải Debian-family (static runtime giúp nhưng FUSE mount cần `fusermount3` setuid).
+
+## 8. App swing — chạy thử
 
 ```sh
 $JAVA_HOME/bin/java -Djava.library.path=<dir> \
@@ -117,7 +144,7 @@ $JAVA_HOME/bin/java -Djava.library.path=<dir> \
     kotanix.ui.KotanixKt --selftest=../app/src/androidTest/assets/kotatsu_test.bak
 ```
 
-## 8. Xác minh nguồn
+## 9. Xác minh nguồn
 
 - `UPSTREAM.lock` — mọi revision/tarball/hash cho app, parsers, deps, toolchain.
 - `THIRD_PARTY_NOTICES.md` — license + attribution của tất cả thành phần.

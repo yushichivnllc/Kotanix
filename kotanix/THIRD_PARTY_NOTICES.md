@@ -39,3 +39,9 @@ Ghi chú:
   upstream); asset thuộc về Kotanix và được phát hành cùng license GPL-3.0.
 - `/usr/bin/kotanix` và `packaging/kotanix.desktop` là script/metadata của dự án (GPL-3.0),
   không có mã nguồn bên thứ ba.
+- Gói **AppImage** đóng gói thêm (link tĩnh vào type2-runtime): libfuse 3.15.0
+  (LGPL-2.1, library only — source ghim trong UPSTREAM.lock §9, người dùng có quyền
+  relink theo LGPL), squashfuse 0.5.2 (BSD-2-Clause), zlib 1.3.1 (zlib License),
+  zstd 1.5.7 (BSD-3-Clause), type2-runtime fedfad51 (MIT). `mksquashfs`
+  (GPL-2.0, squashfs-tools 4.6.1) chỉ là **build tool**, KHÔNG nằm trong AppImage.
+  License đầy đủ của từng thành phần nằm trong source gốc tương ứng.
