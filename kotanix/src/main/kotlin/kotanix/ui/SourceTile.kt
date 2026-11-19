@@ -3,8 +3,6 @@ package kotanix.ui
 import java.awt.Color
 import java.awt.Cursor
 import java.awt.Dimension
-import java.awt.event.MouseAdapter
-import java.awt.event.MouseEvent
 import java.awt.geom.RoundRectangle2D
 import javax.swing.JLabel
 import javax.swing.JPanel
@@ -52,11 +50,10 @@ class SourceTile(
 			alignmentX = CENTER_ALIGNMENT
 		})
 
-		addMouseListener(object : MouseAdapter() {
-			override fun mouseClicked(e: MouseEvent) {
-				// Pin corner hotzone (top-right 34x34 of the glyph area)
-				if (onTogglePin != null && e.y <= 40 && e.x >= width - 40) onTogglePin() else onClick()
-			}
+		withClickThrough(onClick = { e ->
+			// Translate the event point into tile coordinates — the click may land on a child.
+			val p = javax.swing.SwingUtilities.convertPoint(e.component, e.point, this)
+			if (onTogglePin != null && p.y <= 40 && p.x >= width - 40) onTogglePin() else onClick()
 		})
 	}
 
