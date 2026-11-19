@@ -55,27 +55,19 @@ quá bằng chứng trong repo hoặc output test thật. Quy ước trạng th�
 
 ## 4. Giao diện người dùng (M2)
 
-- **XONG (code + headless render kiểm)** UI dùng **Swing** theo phong cách Kotatsu Android (dark Material 3): black background, pill search bar, cover grid (rounded corners, badge tiến độ %, ellipsis 2 dòng), bottom navigation bar, FAB “Đọc tiếp”, overflow ⋮ menu (nhập/xuất backup), icons vẽ programmatically (không copy asset). Trước đây là giao diện mặc định của Swing (menu bar + JList) — đã redesign hoàn toàn. Kiểm chứng: compile + headless component-level render (paint components ra PNG) + `--selftest` 7/7. **GUI trên desktop thật CHƯA XÁC MINH từ máy dev**
-- **XONG (code + headless kiểm chứng)** UI đầu tiên dùng **Swing** (JDK có `java.desktop`;
-  không JavaFX, không Android toolkit). Các màn hình, theo layout Android (Favourites /
-  Local / History):
-  - `kotanix/ui/MainFrame.kt` — cửa sổ chính, 3 tab "Yêu thích", "Local", "Lịch sử";
-    menu Tệp (nhập/xuất `.bak`), Thư viện (thêm thư mục/CBZ, gỡ khỏi local), Trợ giúp.
-    Danh mục yêu thích load từ DB; "Xoá hết lịch sử" có xác nhận.
-  - `kotanix/ui/MangaListPanel.kt` — danh sách có thumbnail; **cover local** load từ đĩa
-    (không mạng); placeholder tối + chữ initial khi không có ảnh; cache icon 128 mục.
-  - `kotanix/ui/ReaderFrame.kt` — reader local: lật trang CHƯƠNG/TOC, phím ←/→/ESC,
-    progressbar, **ghi history mỗi lần lật trang** (giữ `created_at`, cập nhật `chapter_id`,
-    `page`, `percent`, `chapters`), resume từ lịch sử khi mở lại.
-  - `kotanix/ui/SelfTest.kt` — `--selftest=<fixture.bak>` chạy **không cần màn hình**:
-    restore fixture → kiểm tra history/categories/favourites/local import + local_index.
-    Kết quả trên máy này: `SELFTEST OK — 7 checks`.
-- **CHƯA XÁC MINH** UI **hiển thị thật** (màu, font, layout, icon, click) — sandbox
-  headless, không có X11/Wayland. Toàn bộ logic dữ liệu đã kiểm chứng qua `--selftest`
-  và unit smoke test; phần pixels chưa có người nhìn thấy bằng mắt. Cần chạy `kotanix`
-  trên máy có desktop thật trước khi tuyên bố UI hoàn tất.
-- **CHƯA XÁC MINH** đọc CBZ/CBR: chỉ `.cbz`/`.zip` được hỗ trợ; CBR (rar) chưa có
-  decoder (upstream dùng rar5 từ Android lib — ngoài phạm vi hiện tại).
+- **XONG (code + headless render kiểm)** UI dùng **Swing** theo phong cách Kotatsu Android (dark Material 3): black background, pill search bar, cover grid (rounded corners, badge tiến độ %, ellipsis 2 dòng), bottom navigation bar, FAB “Đọc tiếp”, overflow ⋮ menu (nhập/xuất backup), icons vẽ programmatically (không copy asset). Kiểm chứng: compile + headless full-window render ra PNG cho 6 màn hình (Lịch sử / Yêu thích / Khám phá / Local / Details / Dấu trang) + `--selftest` 7/7 + smoke tests. **GUI trên desktop thật vẫn CHƯA XÁC MINH.**
+- **Màn hình hiện có** (theo store listing Android, shot 1–3):
+  - `kotanix/ui/MainFrame.kt` — cửa sổ chính, **4 tab bottom navigation**: “Lịch sử” (mặc định khi mở app, giống Android), “Yêu thích”, “Khám phá”, “Local”. Tap vào card = mở màn details (trước đây double-click mới mở). FAB “Đọc tiếp” chỉ hiện ở tab Lịch sử (như Android shot 1). Overflow ⋮: nhập/xuất backup, Giới thiệu, Thoát.
+  - `kotanix/ui/HistorySectionsPanel.kt` — **Lịch sử gom nhóm theo ngày** (“Vừa xong” / “Hôm nay” / “Hôm qua” / ngày) như shot 1; chips lọc: “Trên máy” (chỉ nguồn LOCAL), “Hoàn thành” (percent ≥ 99,5%), “Xoá lịch sử”. “New chapters” của Android không tính được offline nên không có.
+  - `kotanix/ui/ExplorePanel.kt` — **tab Khám phá (shot 3)**: 2×2 shortcut tiles (Bộ nhớ máy → tab Local, Dấu trang → màn Dấu trang, Ngẫu nhiên → mở manga ngẫu nhiên từ thư viện, Tải xuống → hiện thông báo “chưa được port”, không phải nút chết); “Gợi ý cho bạn” (random từ thư viện local, ưu tiên chưa đọc — **không** phải remote suggestions feed của upstream); “Nguồn truyện” (roll-up `source` thật trong DB: LOCAL + nguồn online từ backup, hiển thị pin như source grid Android; click nguồn online → thông báo chưa port M2). Gõ tìm kiếm trong pill → lưới kết quả local (searchByTitle).
+  - `kotanix/ui/MangaDetailsDialog.kt` — **màn details (shot 2)**: back arrow + overflow ⋮ (mở thư mục chứa / gỡ khỏi thư viện local / sao chép tiêu đề), cover lớn bo tròn + title + alt title, pill “Yêu thích” (toggle, không có dropdown chọn category — đơn giản hoá), info card (Nguồn / Tác giả / Tình trạng / Chapters / Tiến độ với progress bar accent + %), mô tả, chips thể loại, danh sách chapter đảo ngược (click = mở reader ở chapter đó), CTA “Đọc tiếp” accent. Field online-only hiện “—” khi không có dữ liệu; nguồn online chỉ hiện khi có trong backup.
+  - `kotanix/ui/BookmarksDialog.kt` — **Dấu trang (phần bookmarks của shot 3 tile)**: list bản ghi bookmarks từ DB (cover + title + percent + ngày); click mở reader (resume từ history — **chưa** restore đúng trang bookmark, vì ReaderFrame chưa đọc bookmark khi mở).
+  - `kotanix/ui/MangaDetailsDialog.kt` chia làm `MangaDetailsContent` (panel) + `MangaDetailsDialog` (shell) và `BookmarksDialog` chia làm `BookmarksContent` (panel) — để headless render kiểm thử được mà không cần X11.
+  - `kotanix/ui/ReaderFrame.kt` — reader local (không đổi): lật trang CHƯƠNG/TOC, phím ←/→/ESC, progressbar, ghi history mỗi lần lật trang, resume; nhận tham số `startChapter` (từ details/chapter click).
+  - `kotanix/ui/FillWidthPanel` (trong `Theme.kt`) — container GridBag một cột có `Scrollable.tracksViewportWidth` (BoxLayout thiếu điều này + unparented components orientation UNKNOWN ⇒ headless render lệch trái/phải; GridBag + NORTHWEST anchor deterministic).
+- **Đơn giản hoá có chủ đích so với Android** (không làm giả): bottom nav 4 tab thay vì 5 (Feed RSS và Suggestions là tính năng online, chưa có backend — tab Local chiếm vị trí); nút “Tải xuống” hiện notice “chưa được port”; không có download manager; không có source catalog online (chỉ roll-up nguồn trong DB); suggestions là local; “Đọc tiếp” mở thẳng most-recent history; details không có dropdown category favourite; reader không có bottom-sheet tuỳ chọn (sẽ làm khi port reader options).
+- **CHƯA XÁC MINH** UI **hiển thị thật** (màu, font, layout, icon, click) — sandbox headless, không có X11/Wayland. Toàn bộ logic dữ liệu đã kiểm chứng qua `--selftest` và unit smoke test; các màn hình được kiểm chứng bằng headless paint → PNG. Cần chạy `kotanix` trên máy có desktop thật trước khi tuyên bố UI hoàn tất.
+- **CHƯA XÁC MINH** đọc CBZ/CBR: chỉ `.cbz`/`.zip` được hỗ trợ; CBR (rar) chưa có decoder.
 
 ## 5. Online parsers (M2)
 

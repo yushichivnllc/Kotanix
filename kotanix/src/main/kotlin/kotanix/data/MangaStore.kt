@@ -133,6 +133,16 @@ class MangaStore(private val db: SqliteDatabase) {
 			mangaId,
 		) { Rows.readTag(it) }.toSet()
 
+	/** All manga rows (ids + titles + covers), newest first — used by Explore suggestions/random. */
+	fun findAll(limit: Int = 300): List<Manga> =
+		db.query("SELECT * FROM manga ORDER BY manga_id DESC LIMIT ?", limit) { Rows.readManga(it) }
+
+	/** Source id → number of manga in the library, most-populated first (Explore "nguồn truyện"). */
+	fun countBySource(): List<Pair<String, Int>> =
+		db.query("SELECT source, COUNT(*) FROM manga GROUP BY source ORDER BY COUNT(*) DESC, source") {
+			it.getString(0).orEmpty() to it.getInt(1)
+		}
+
 	fun searchByTitle(query: String, limit: Int): List<Manga> =
 		db.query(
 			"SELECT * FROM manga WHERE title LIKE ? ESCAPE '!' ORDER BY title COLLATE NOCASE LIMIT ?",

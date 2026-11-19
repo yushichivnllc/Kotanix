@@ -70,7 +70,7 @@ class WrapLayout(align: Int = FlowLayout.LEFT, hgap: Int = 14, vgap: Int = 14) :
 }
 
 /** Fixed-width content panel whose height follows the wrapped layout. */
-private class WrapPanel : JPanel(WrapLayout(FlowLayout.LEFT, 14, 14)), Scrollable {
+class WrapPanel : JPanel(WrapLayout(FlowLayout.LEFT, 14, 14)), Scrollable {
 	override fun getPreferredScrollableViewportSize(): Dimension = preferredSize
 	override fun getScrollableUnitIncrement(visibleRect: java.awt.Rectangle, orientation: Int, direction: Int): Int = 40
 	override fun getScrollableBlockIncrement(visibleRect: java.awt.Rectangle, orientation: Int, direction: Int): Int = visibleRect.height.coerceAtLeast(200)
@@ -91,10 +91,6 @@ class CoverCard(
 	var percent: Float? = percent
 		set(value) { field = value; repaint() }
 
-	var selected: Boolean = false
-		set(value) { field = value; repaint() }
-
-	var onSelect: ((CoverCard) -> Unit)? = null
 	var onOpen: ((CoverCard) -> Unit)? = null
 
 	private var hover = false
@@ -107,10 +103,7 @@ class CoverCard(
 		addMouseListener(object : MouseAdapter() {
 			override fun mouseEntered(e: MouseEvent) { hover = true; repaint() }
 			override fun mouseExited(e: MouseEvent) { hover = false; repaint() }
-			override fun mouseClicked(e: MouseEvent) {
-				onSelect?.invoke(this@CoverCard)
-				if (e.clickCount == 2) onOpen?.invoke(this@CoverCard)
-			}
+			override fun mouseClicked(e: MouseEvent) { onOpen?.invoke(this@CoverCard) }
 		})
 	}
 
@@ -128,17 +121,11 @@ class CoverCard(
 		}
 		g2.clip = null
 
-		// subtle outline (or accent ring when selected)
-		if (selected) {
-			g2.color = T.Accent
-			g2.stroke = BasicStroke(3f)
-			g2.draw(RoundRectangle2D.Float(1.5f, 1.5f, CARD_W - 3f, COVER_H - 3f, RADIUS, RADIUS))
-		} else {
-			g2.color = T.Outline
-			g2.stroke = BasicStroke(1f)
-			g2.draw(RoundRectangle2D.Float(0.5f, 0.5f, CARD_W - 1f, COVER_H - 1f, RADIUS, RADIUS))
-		}
-		if (hover && !selected) {
+		// subtle outline
+		g2.color = T.Outline
+		g2.stroke = BasicStroke(1f)
+		g2.draw(RoundRectangle2D.Float(0.5f, 0.5f, CARD_W - 1f, COVER_H - 1f, RADIUS, RADIUS))
+		if (hover) {
 			g2.color = Color(255, 255, 255, 26)
 			g2.fill(coverBounds)
 		}
@@ -148,7 +135,7 @@ class CoverCard(
 
 		// title, max two lines, dimmed second line
 		g2.font = T.font(12f)
-		g2.color = if (selected) T.Accent else T.OnBg
+		g2.color = T.OnBg
 		val lines = wrapTitle(g2, manga.title, CARD_W)
 		var ty = COVER_H + 6 + g2.fontMetrics.ascent - 2
 		for (line in lines) {
@@ -279,9 +266,6 @@ class CoverGridPanel(
 		border = javax.swing.border.EmptyBorder(60, 40, 60, 40)
 	}
 
-	private val cards = mutableListOf<CoverCard>()
-	private var selectedCard: CoverCard? = null
-
 	fun setItems(items: List<GridItem>) {
 		allItems = items
 		applyFilter()
@@ -292,23 +276,15 @@ class CoverGridPanel(
 		applyFilter()
 	}
 
-	fun selected(): Manga? = selectedCard?.manga
-
-	fun selectedPercent(): Float? = selectedCard?.percent
-
 	private fun applyFilter() {
 		val filtered = if (query.isEmpty()) allItems else allItems.filter {
 			(it.manga.title + " " + it.manga.altTitles.joinToString(" ")).lowercase().contains(query)
 		}
 		wrap.removeAll()
-		cards.clear()
-		selectedCard = null
 		for (item in filtered) {
 			val card = CoverCard(item.manga, item.percent).apply {
-				onSelect = { select(it) }
 				onOpen = { onOpen(it.manga) }
 			}
-			cards += card
 			wrap.add(card)
 		}
 		val showEmpty = filtered.isEmpty()
@@ -316,12 +292,5 @@ class CoverGridPanel(
 		if (showEmpty) add(empty, BorderLayout.CENTER) else add(scroll, BorderLayout.CENTER)
 		revalidate()
 		repaint()
-	}
-
-	private fun select(card: CoverCard) {
-		if (selectedCard === card) return
-		selectedCard?.selected = false
-		selectedCard = card
-		card.selected = true
 	}
 }

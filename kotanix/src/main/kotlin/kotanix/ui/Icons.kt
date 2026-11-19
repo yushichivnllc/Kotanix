@@ -233,4 +233,66 @@ object Icons {
 			3,
 		)
 	}
+
+	/** Compass — the Explore tab icon. */
+	fun compass(size: Int, color: Color): BufferedImage = canvas(size) { g ->
+		val s = size / 24f
+		g.stroke(color, 1.9f * s)
+		g.drawOval((4 * s).toInt(), (4 * s).toInt(), (16 * s).toInt(), (16 * s).toInt())
+		g.color = color
+		val needle = Path2D.Float().apply {
+			moveTo((14.8f * s), (9.2f * s))
+			lineTo((12.9f * s), (12.9f * s))
+			lineTo((9.2f * s), (14.8f * s))
+			lineTo((11.1f * s), (11.1f * s))
+			closePath()
+		}
+		g.fill(needle)
+	}
+
+	/** Dice — the "Random" action. */
+	fun dice(size: Int, color: Color): BufferedImage = canvas(size) { g ->
+		val s = size / 24f
+		g.stroke(color, 1.9f * s)
+		g.draw(RoundRectangle2D.Float(4 * s, 4 * s, 16 * s, 16 * s, 3.5f * s, 3.5f * s))
+		g.color = color
+		val dot = 1.35f * s
+		for ((dx, dy) in listOf(6.8f to 6.8f, 17.2f to 6.8f, 12f to 12f, 6.8f to 17.2f, 17.2f to 17.2f)) {
+			g.fillOval((dx * s - dot).toInt(), (dy * s - dot).toInt(), (dot * 2).toInt(), (dot * 2).toInt())
+		}
+	}
+
+	/** Bookmark — the bookmarks action. */
+	fun bookmark(size: Int, color: Color): BufferedImage = canvas(size) { g ->
+		val s = size / 24f
+		g.stroke(color, 1.9f * s)
+		val p = Path2D.Float().apply {
+			moveTo(7f * s, 4f * s)
+			lineTo(17f * s, 4f * s)
+			lineTo(17f * s, 20f * s)
+			lineTo(12f * s, 16.2f * s)
+			lineTo(7f * s, 20f * s)
+			closePath()
+		}
+		g.draw(p)
+	}
+
+	/** Push-pin — marks a pinned source, like Kotatsu's source grid. */
+	fun pin(size: Int, color: Color): BufferedImage = canvas(size) { g ->
+		val s = size / 24f
+		g.stroke(color, 1.9f * s)
+		val p = Path2D.Float().apply {
+			moveTo(9f * s, 4f * s)
+			lineTo(15f * s, 4f * s)
+			lineTo(14.2f * s, 10f * s)
+			lineTo(17.5f * s, 13f * s)
+			lineTo(17.5f * s, 15.2f * s)
+			lineTo(6.5f * s, 15.2f * s)
+			lineTo(6.5f * s, 13f * s)
+			lineTo(9.8f * s, 10f * s)
+			closePath()
+		}
+		g.draw(p)
+		g.drawLine((12 * s).toInt(), (15.2f * s).toInt(), (12 * s).toInt(), (20.5f * s).toInt())
+	}
 }
