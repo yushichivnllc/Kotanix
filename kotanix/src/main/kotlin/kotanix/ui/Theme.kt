@@ -362,3 +362,31 @@ internal class FillWidthPanel : javax.swing.JPanel(java.awt.GridBagLayout()), ja
 	override fun getScrollableBlockIncrement(visibleRect: java.awt.Rectangle, orientation: Int, direction: Int): Int =
 		visibleRect.height.coerceAtLeast(200)
 }
+
+
+/**
+ * Swing never delivers mouse events to a parent component when a child of it sits at the
+ * point — events do not bubble. Rows whose surface is made of labels/covers therefore
+ * look inert to clicks. Attach [onClick]/[onHover] to this component and **every current
+ * descendant**; call as the last step of construction. Also pins a HAND cursor everywhere
+ * in the subtree for affordance. [onHover] receives true/false for pointer-enters/leaves
+ * anywhere in the row.
+ */
+fun java.awt.Component.withClickThrough(
+	onClick: ((java.awt.event.MouseEvent) -> Unit)? = null,
+	onHover: ((Boolean) -> Unit)? = null,
+) {
+	val adapter = object : java.awt.event.MouseAdapter() {
+		override fun mouseClicked(e: java.awt.event.MouseEvent) { onClick?.invoke(e) }
+		override fun mouseEntered(e: java.awt.event.MouseEvent) { onHover?.invoke(true) }
+		override fun mouseExited(e: java.awt.event.MouseEvent) { onHover?.invoke(false) }
+	}
+	fun add(c: java.awt.Component) {
+		c.addMouseListener(adapter)
+		if (onClick != null) c.cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
+		if (c is java.awt.Container) {
+			for (child in c.components) add(child)
+		}
+	}
+	add(this)
+}

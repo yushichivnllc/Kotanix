@@ -7,8 +7,6 @@ import kotanix.data.SqliteDatabase
 import java.awt.BorderLayout
 import java.awt.Cursor
 import java.awt.Dimension
-import java.awt.event.MouseAdapter
-import java.awt.event.MouseEvent
 import java.awt.geom.RoundRectangle2D
 import javax.swing.JDialog
 import javax.swing.JFrame
@@ -28,7 +26,7 @@ class BookmarksDialog(
 	owner: JFrame,
 	db: SqliteDatabase,
 	onOpenManga: (Manga) -> Unit,
-) : JDialog(owner, "Dấu trang", true) {
+) : JDialog(owner, "Dấu trang", false) {
 
 	init {
 		defaultCloseOperation = DISPOSE_ON_CLOSE
@@ -152,11 +150,10 @@ private class BookmarkRow(
 		add(text, BorderLayout.CENTER)
 
 		if (manga != null) {
-			addMouseListener(object : MouseAdapter() {
-				override fun mouseEntered(e: MouseEvent) { hover = true; repaint() }
-				override fun mouseExited(e: MouseEvent) { hover = false; repaint() }
-				override fun mouseClicked(e: MouseEvent) { onOpen() }
-			})
+			withClickThrough(
+				onClick = { onOpen() },
+				onHover = { hover = it; repaint() },
+			)
 		}
 	}
 

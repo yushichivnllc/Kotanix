@@ -272,11 +272,10 @@ private class TileButton(
 		cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
 		preferredSize = Dimension(0, 64)
 		minimumSize = Dimension(120, 64)
-		addMouseListener(object : MouseAdapter() {
-			override fun mouseEntered(e: MouseEvent) { hover = true; repaint() }
-			override fun mouseExited(e: MouseEvent) { hover = false; repaint() }
-			override fun mouseClicked(e: MouseEvent) { onClick() }
-		})
+		withClickThrough(
+			onClick = { onClick() },
+			onHover = { hover = it; repaint() },
+		)
 	}
 
 	override fun paintComponent(g: java.awt.Graphics) {
@@ -329,11 +328,10 @@ private class SuggestionRow(
 		}
 		add(text, BorderLayout.CENTER)
 
-		addMouseListener(object : MouseAdapter() {
-			override fun mouseEntered(e: MouseEvent) { hover = true; repaint() }
-			override fun mouseExited(e: MouseEvent) { hover = false; repaint() }
-			override fun mouseClicked(e: MouseEvent) { onOpen(manga) }
-		})
+		withClickThrough(
+			onClick = { onOpen(manga) },
+			onHover = { hover = it; repaint() },
+		)
 	}
 
 	override fun paintComponent(g: java.awt.Graphics) {

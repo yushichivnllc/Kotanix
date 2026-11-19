@@ -43,7 +43,7 @@ class SourcesCatalogDialog(
 	db: SqliteDatabase,
 	onInfo: (String) -> Unit,
 	onPinsChanged: () -> Unit,
-) : JDialog(owner, "Nguồn truyện", true) {
+) : JDialog(owner, "Nguồn truyện", false) {
 
 	init {
 		defaultCloseOperation = DISPOSE_ON_CLOSE

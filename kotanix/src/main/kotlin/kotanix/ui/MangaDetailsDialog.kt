@@ -13,8 +13,6 @@ import java.awt.Cursor
 import java.awt.Dimension
 import java.awt.FlowLayout
 import java.awt.GridLayout
-import java.awt.event.MouseAdapter
-import java.awt.event.MouseEvent
 import java.awt.geom.RoundRectangle2D
 import javax.swing.JDialog
 import javax.swing.JFrame
@@ -311,13 +309,12 @@ class MangaDetailsContent(
 				add(text, BorderLayout.CENTER)
 				border = EmptyBorder(2, 4, 2, 4)
 				maximumSize = Dimension(Int.MAX_VALUE, 56)
-				addMouseListener(object : MouseAdapter() {
-					override fun mouseEntered(e: MouseEvent) { hover = true; repaint() }
-					override fun mouseExited(e: MouseEvent) { hover = false; repaint() }
-					override fun mouseClicked(e: MouseEvent) {
+				withClickThrough(
+					onClick = {
 						if (onOpenReader(manga, index)) onClose()
-					}
-				})
+					},
+					onHover = { hover = it; repaint() },
+				)
 			}
 
 			override fun paintComponent(g: java.awt.Graphics) {

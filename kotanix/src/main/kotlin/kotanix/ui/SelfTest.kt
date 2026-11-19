@@ -7,6 +7,7 @@ import kotanix.core.Manga
 import kotanix.core.MangaChapter
 import kotanix.data.*
 import kotanix.local.LocalMangaParser
+import kotanix.local.PageFormats
 import java.io.File
 import java.io.FileInputStream
 
@@ -104,6 +105,27 @@ object SelfTest {
 		check("local path round-trip") {
 			val manga = localManga!!
 			require(mangaStore.getLocalPath(manga.id) == localRoot.absolutePath) { "local_index mismatch" }
+		}
+
+		check("unsupported page format detection") {
+			// Magic bytes only — detection must not depend on an encoder being present.
+			val webp = byteArrayOf(0x52, 0x49, 0x46, 0x46, 0x20, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50, 0x56, 0x50, 0x38, 0x20) // "RIFF…\0WEBPVP8 "
+			val avif = byteArrayOf(0x00, 0x00, 0x00, 0x20, 0x66, 0x74, 0x79, 0x70, 0x61, 0x76, 0x69, 0x66) // size + "ftyp" + "avif"
+			val jxl = byteArrayOf(0xFF.toByte(), 0x0A) // raw JXL codestream magic
+			val png = tinyPngBytes()
+			require(PageFormats.sniff(webp) == "WebP") { "webp sniff failed: ${PageFormats.sniff(webp)}" }
+			require(PageFormats.sniff(avif) == "AVIF") { "avif sniff failed: ${PageFormats.sniff(avif)}" }
+			require(PageFormats.sniff(jxl) == "JPEG XL") { "jxl sniff failed: ${PageFormats.sniff(jxl)}" }
+			require(PageFormats.sniff(png) == "PNG") { "png sniff failed: ${PageFormats.sniff(png)}" }
+			// Extension gate follows the *runtime* ImageIO readers — never hardcoded.
+			require(PageFormats.isSupportedExt("a.png"))
+			require(PageFormats.isSupportedExt("A.JPG"))
+			require(PageFormats.isSupportedExt("b.tiff"))
+			require(!PageFormats.isSupportedExt("c.webp"))
+			require(!PageFormats.isSupportedExt("d.avif"))
+			val summary = PageFormats.unsupportedSummary(listOf("p1.png", "p2.webp", "p3.webp", "p4.jxl", "p5.jpg"))
+			require(summary == mapOf("WebP" to 2, "JPEG XL" to 1)) { "unsupportedSummary mismatch: $summary" }
+			println("  unsupportedSummary = $summary")
 		}
 
 		for ((name, block) in checks) {

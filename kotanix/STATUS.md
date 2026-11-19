@@ -55,7 +55,7 @@ quá bằng chứng trong repo hoặc output test thật. Quy ước trạng th�
 
 ## 4. Giao diện người dùng (M2)
 
-- **XONG (code + headless render kiểm)** UI dùng **Swing** theo phong cách Kotatsu Android (dark Material 3): black background, pill search bar, cover grid (rounded corners, badge tiến độ %, ellipsis 2 dòng), bottom navigation bar, FAB “Đọc tiếp”, overflow ⋮ menu (nhập/xuất backup), icons vẽ programmatically (không copy asset). Kiểm chứng: compile + headless full-window render ra PNG cho 6 màn hình (Lịch sử / Yêu thích / Khám phá / Local / Details / Dấu trang) + `--selftest` 7/7 + smoke tests. **GUI trên desktop thật vẫn CHƯA XÁC MINH.**
+- **XONG (code + headless render kiểm)** UI dùng **Swing** theo phong cách Kotatsu Android (dark Material 3): black background, pill search bar, cover grid (rounded corners, badge tiến độ %, ellipsis 2 dòng), bottom navigation bar, FAB “Đọc tiếp”, overflow ⋮ menu (nhập/xuất backup), icons vẽ programmatically (không copy asset). Kiểm chứng: compile + headless full-window render ra PNG cho 6 màn hình (Lịch sử / Yêu thích / Khám phá / Local / Details / Dấu trang) + `--selftest` 8/8 + smoke tests. **GUI trên desktop thật vẫn CHƯA XÁC MINH.**
 - **Màn hình hiện có** (theo store listing Android, shot 1–3):
   - `kotanix/ui/MainFrame.kt` — cửa sổ chính, **4 tab bottom navigation**: “Lịch sử” (mặc định khi mở app, giống Android), “Yêu thích”, “Khám phá”, “Local”. Tap vào card = mở màn details (trước đây double-click mới mở). FAB “Đọc tiếp” chỉ hiện ở tab Lịch sử (như Android shot 1). Overflow ⋮: nhập/xuất backup, Giới thiệu, Thoát.
   - `kotanix/ui/HistorySectionsPanel.kt` — **Lịch sử gom nhóm theo ngày** (“Vừa xong” / “Hôm nay” / “Hôm qua” / ngày) như shot 1; chips lọc: “Trên máy” (chỉ nguồn LOCAL), “Hoàn thành” (percent ≥ 99,5%), “Xoá lịch sử”. “New chapters” của Android không tính được offline nên không có.
@@ -73,7 +73,7 @@ quá bằng chứng trong repo hoặc output test thật. Quy ước trạng th�
   - `kotanix/ui/SourceTile.kt` — tile nguồn dùng chung (glyph chữ cái, pin, trạng thái hỏng/cũ) cho
     cả màn danh mục lẫn section “Nguồn truyện” của tab Khám phá (pinned hiển thị trước; fallback
     về roll-up nguồn trong DB như trước khi chưa có ghim).
-  - `kotanix/ui/ReaderFrame.kt` — reader local (không đổi): lật trang CHƯƠNG/TOC, phím ←/→/ESC, progressbar, ghi history mỗi lần lật trang, resume; nhận tham số `startChapter` (từ details/chapter click).
+  - `kotanix/ui/ReaderFrame.kt` — reader local: lật trang CHƯƠNG/TOC, phím ←/→/ESC, progressbar, ghi history mỗi lần lật trang, resume; nhận tham số `startChapter` (từ details/chapter click). **Cảnh báo định dạng**: chapter có trang WebP/AVIF/JXL/HEIF (ImageIO không giải mã được) hiển thị banner đếm số trang lỗi + tooltip hướng dẫn; lỗi từng trang nêu rõ định dạng thật (magic-byte), không còn báo lỗi chung chung — xem §8.
   - `kotanix/ui/FillWidthPanel` (trong `Theme.kt`) — container GridBag một cột có `Scrollable.tracksViewportWidth` (BoxLayout thiếu điều này + unparented components orientation UNKNOWN ⇒ headless render lệch trái/phải; GridBag + NORTHWEST anchor deterministic).
 - **Đơn giản hoá có chủ đích so với Android** (không làm giả): bottom nav 4 tab thay vì 5 (Feed RSS và Suggestions là tính năng online, chưa có backend — tab Local chiếm vị trí); nút “Tải xuống” hiện notice “chưa được port”; không có download manager; không có source catalog online (chỉ roll-up nguồn trong DB); suggestions là local; “Đọc tiếp” mở thẳng most-recent history; details không có dropdown category favourite; reader không có bottom-sheet tuỳ chọn (sẽ làm khi port reader options).
 - **CHƯA XÁC MINH** UI **hiển thị thật** (màu, font, layout, icon, click) — sandbox headless, không có X11/Wayland. Toàn bộ logic dữ liệu đã kiểm chứng qua `--selftest` và unit smoke test; các màn hình được kiểm chứng bằng headless paint → PNG. Cần chạy `kotanix` trên máy có desktop thật trước khi tuyên bố UI hoàn tất.
@@ -140,3 +140,34 @@ quá bằng chứng trong repo hoặc output test thật. Quy ước trạng th�
   validation ở bất cứ đâu.
 - `tools/package-deb.sh` cần toolchain (`setup-toolchain.sh`) + jars (`build-deps.sh`);
   `.deb` build ra đặt ở `kotanix/build/dist/` (gitignored, không commit).
+- **Reader chưa giải mã được WebP/AVIF/JXL/HEIF** — ImageIO của JRE chỉ đọc
+  JPG/JPEG/PNG/GIF/BMP/TIFF/WBMP (đã kiểm `ImageIO.getReaderFormatNames()` trên Temurin
+  21.0.8 ghim). CBZ/manga tải từ nguồn online (mangalib…) thường đầy trang WebP nên
+  “không đọc được truyện”. Hiện chỉ có cảnh báo rõ ràng + hướng dẫn chuyển định dạng
+  (§8); đường sửa thật: vendor TwelveMonkeys `imageio-webp` (pure Java) — cần full JDK
+  có javac/jdk.compiler (jdk4py chỉ có JRE) và pin SHA-256 như các dep khác, **hoặc**
+  spike FFM (Java 21 `java.lang.foreign`, chế độ incubator) gọi thẳng `libwebp` hệ thống
+  — cả hai chưa làm, chưa tuyên bố hỗ trợ.
+
+## 8. Reader: trang WebP/AVIF không hiển thị (cập nhật 2026-11-18)
+
+- **Báo cáo**: “Không đọc được trang N” / trang đen khi đọc local CBZ.
+- **Tái hiện + xác minh trong sandbox** (đường code thật: `LocalMangaParser.getPages`
+  → `readPage` → `ImageIO.read`): fixture CBZ trộn 2 trang PNG + 3 trang WebP → PNG đọc
+  OK, WebP trả về `null` ⇒ đúng lỗi user thấy. Kiểm trực tiếp format ImageIO hỗ trợ:
+  `JPG, jpg, tiff, bmp, BMP, gif, GIF, WBMP, png, PNG, JPEG, tif, TIF, TIFF, jpeg, wbmp`.
+- **Đã làm** (honest degradation, **không** giả vờ đọc được):
+  - `kotanix/local/PageFormats.kt` (mới): tập extension hỗ trợ lấy **runtime** từ
+    `ImageIO.getReaderFormatNames()` (không hardcode), sniff magic bytes
+    (JPEG/PNG/GIF/BMP/WebP/TIFF/AVIF/HEIF/JPEG XL qua RIFF/ftyp), đếm trang lỗi theo
+    định dạng (`unsupportedSummary`).
+  - `ReaderFrame`: banner vàng đầu chapter “⚠ n/m trang không giải mã được: k× WebP…”,
+    tooltip hướng dẫn chuyển sang PNG/JPG (ImageMagick `mogrify`, XnConvert, IrfanView —
+    user tự chọn công cụ, Kotanix không gọi subprocess nào); lỗi từng trang nêu rõ định
+    dạng thật thay vì “Không đọc được trang N”.
+  - `SelfTest` thêm check “unsupported page format detection” (magic bytes, không cần
+    encoder): **SELFTEST OK — 8 checks**; SMOKE / BACKUP SMOKE / LOCAL LAYOUT đều pass.
+- **CHƯA làm / CHƯA XÁC MINH**: **không** có bộ giải mã WebP/AVIF trong app — các trang
+  đó vẫn không hiển thị, chỉ được giải thích rõ. Chưa kiểm GUI trên desktop thật; chưa
+  đo trên CBZ thật của user (cần user chạy bản build mới để xác nhận banner hiện đúng
+  định dạng của họ). Toast/nút “chuyển đổi” không có (không có decoder). Hướng sửa §7.
