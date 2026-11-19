@@ -29,7 +29,7 @@ object Json {
 	}
 
 	fun parseObject(text: String): MutableMap<String, Any?> =
-		parse(text) as? MutableMap<String, Any?>
+		parse(text).asJsonMutableMap()
 			?: throw JsonException("Expected JSON object")
 
 	fun stringify(value: Any?): String {
@@ -301,6 +301,19 @@ object Json {
 	}
 }
 
+/**
+ * JSON trees produced by [Json.parse] hold objects as `Map<String, Any?>` by construction
+ * (the parser builds LinkedHashMap<String, Any?> — see `parseObject` in the parser), so
+ * these casts never fail at runtime. They are centralised here so the rest of the module
+ * stays free of unchecked-cast warnings; a violation would surface as a ClassCastException
+ * at this one site instead of silently corrupting data elsewhere.
+ */
+@Suppress("UNCHECKED_CAST")
+internal fun Any?.asJsonMap(): Map<String, Any?>? = this as? Map<String, Any?>
+
+@Suppress("UNCHECKED_CAST")
+internal fun Any?.asJsonMutableMap(): MutableMap<String, Any?>? = this as? MutableMap<String, Any?>
+
 class JsonException(message: String) : RuntimeException(message)
 
 /** Typed view over a parsed object. Missing keys fall back to caller-provided defaults. */
@@ -328,10 +341,10 @@ class JsonObject(private val map: Map<String, Any?>) {
 		else -> default
 	}
 
-	fun obj(key: String): JsonObject? = (map[key] as? Map<*, *>)?.let { JsonObject(it as Map<String, Any?>) }
+	fun obj(key: String): JsonObject? = map[key].asJsonMap()?.let { JsonObject(it) }
 	fun list(key: String): List<Any?> = map[key] as? List<Any?> ?: emptyList()
 	fun objectOf(key: String): MutableMap<String, Any?> =
-		(map[key] as? Map<*, *>)?.let { LinkedHashMap(it as Map<String, Any?>) } ?: LinkedHashMap()
+		map[key].asJsonMap()?.let { LinkedHashMap(it) } ?: LinkedHashMap()
 }
 
-fun Any?.asObject(): JsonObject = JsonObject(this as? Map<String, Any?> ?: emptyMap())
+fun Any?.asObject(): JsonObject = JsonObject(this.asJsonMap() ?: emptyMap())

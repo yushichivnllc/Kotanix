@@ -456,12 +456,12 @@ internal class MangaIndex(
 
 	companion object {
 		fun parse(text: String): MangaIndex {
-			val root = Json.parse(text) as? Map<String, Any?>
+			val root = Json.parse(text).asJsonMap()
 				?: throw JsonException("index.json is not an object")
 			val source = (root["source"] as? String) ?: LOCAL_SOURCE
 			val tagsAny = root["tags"] as? List<*> ?: emptyList<Any?>()
 			val tags = tagsAny.mapNotNull { raw ->
-				val t = raw as? Map<String, Any?> ?: return@mapNotNull null
+				val t = raw.asJsonMap() ?: return@mapNotNull null
 				val key = t["key"] as? String ?: return@mapNotNull null
 				MangaTag(
 					id = key.longHashCode(),
@@ -470,9 +470,9 @@ internal class MangaIndex(
 					source = source,
 				)
 			}.toSet()
-			val chaptersJson = root["chapters"] as? Map<String, Any?>
+			val chaptersJson = root["chapters"].asJsonMap()
 			val chapters = chaptersJson?.mapValues { (id, v) ->
-				((v as? Map<String, Any?>) ?: emptyMap()) + ("id" to id)
+				((v.asJsonMap()) ?: emptyMap()) + ("id" to id)
 			}
 			return MangaIndex(
 				mangaId = (root["id"] as? Number)?.toLong() ?: (root["id"] as? String)?.toLongOrNull(),

@@ -361,13 +361,13 @@ object Backup {
 	private fun parseArrayItems(text: String): List<Map<String, Any?>> {
 		val root = Json.parse(text)
 		val list = root as? List<*> ?: throw JsonException("expected JSON array")
-		return list.mapNotNull { it as? Map<String, Any?> }
+		return list.mapNotNull { it.asJsonMap() }
 	}
 
 	private fun readSingleObjectMap(text: String): Map<String, Any?>? {
 		val root = Json.parse(text) as? List<*> ?: return null
 		@Suppress("UNCHECKED_CAST")
-		return root.firstOrNull() as? Map<String, Any?>
+		return root.firstOrNull().asJsonMap()
 	}
 
 	private fun restoreHistory(text: String, mangaStore: MangaStore, historyStore: HistoryStore, report: RestoreReport) {
@@ -375,7 +375,7 @@ object Backup {
 		val failures = mutableListOf<String>()
 		for (item in parseArrayItems(text)) {
 			try {
-				val mangaJson = item["manga"] as? Map<String, Any?>
+				val mangaJson = item["manga"].asJsonMap()
 					?: throw JsonException("history entry missing embedded manga")
 				val manga = readMangaBackup(mangaJson)
 				mangaStore.upsertMangaWithChapters(manga)
@@ -431,7 +431,7 @@ object Backup {
 		val failures = mutableListOf<String>()
 		for (item in parseArrayItems(text)) {
 			try {
-				val mangaJson = item["manga"] as? Map<String, Any?>
+				val mangaJson = item["manga"].asJsonMap()
 					?: throw JsonException("favourite entry missing embedded manga")
 				val manga = readMangaBackup(mangaJson)
 				mangaStore.upsertMangaWithChapters(manga)
@@ -480,12 +480,12 @@ object Backup {
 		for (item in parseArrayItems(text)) {
 			try {
 				// BookmarkBackup: { manga: {...}, tags: [...], bookmarks: [...] }
-				val mangaJson = item["manga"] as? Map<String, Any?>
+				val mangaJson = item["manga"].asJsonMap()
 					?: throw JsonException("bookmark entry missing manga")
 				val manga = readMangaBackup(mangaJson)
 				mangaStore.upsertMangaWithChapters(manga)
 				for (raw in (item["bookmarks"] as? List<*>) ?: emptyList<Any?>()) {
-					val b = raw as? Map<String, Any?> ?: continue
+					val b = raw.asJsonMap() ?: continue
 					bookmarkStore.restore(
 						BookmarkEntry(
 							mangaId = longOf(b, "manga_id"),
@@ -537,7 +537,7 @@ object Backup {
 		val authors = stringOf(json, "author")
 			.split('\n').map { it.trim() }.filter { it.isNotEmpty() }.toSet()
 		val tags = ((json["tags"] as? List<*>) ?: emptyList<Any?>()).mapNotNull { raw ->
-			val t = raw as? Map<String, Any?> ?: return@mapNotNull null
+			val t = raw.asJsonMap() ?: return@mapNotNull null
 			MangaTag(
 				id = longOf(t, "id"),
 				title = stringOf(t, "title"),
